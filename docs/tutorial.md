@@ -2,7 +2,7 @@
 
 ## 推荐版本
 
-- 部署工具：`v1.2.0`（稳定版）
+- 部署工具：`v1.2.1`（稳定版）
 - 代理核心：GOST `3.2.6`（脚本固定版本并验证 SHA-256）
 - 推荐系统：Ubuntu 24.04 LTS `amd64`；已有 Ubuntu 22.04 节点可以继续使用
 - Windows 终端：Xshell 8
@@ -57,17 +57,17 @@ ss -lntp
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.2.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.2.1 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 cd /root/socks5-toolkit
-bash xshell-install.sh --name MX-01 --port 31080
+bash xshell-install.sh --port 31080
 ```
 
 ## 四、从 macOS 安装
 
 ```bash
-git clone --branch v1.2.0 --depth 1 git@github.com:wkx176617-sys/GIT.git
+git clone --branch v1.2.1 --depth 1 git@github.com:wkx176617-sys/GIT.git
 cd GIT
-./deploy.sh root@VPS公网IP --name MX-01 --port 31080
+./deploy.sh root@VPS公网IP --port 31080
 ```
 
 脚本会上传安装文件、下载并校验固定 GOST 版本、生成独立账号密码、创建低权限服务账户并启用开机启动。
@@ -77,7 +77,7 @@ cd GIT
 安装成功后，把下面信息保存到密码管理器，不要写入仓库：
 
 ```text
-节点名称
+VPS 公网 IP（同时作为节点名称）
 国家/地区
 VPS 公网 IP
 端口 31080
@@ -152,7 +152,7 @@ socksctl rotate
 cd /root/socks5-toolkit
 git fetch --tags
 git switch --detach v1.1.0
-bash xshell-install.sh --name MX-01 --port 31080
+bash xshell-install.sh --port 31080
 ```
 
 不要使用 `git reset --hard` 清理服务器目录。

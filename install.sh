@@ -14,9 +14,10 @@ readonly UNINSTALL_PATH="/usr/local/sbin/socks-uninstall"
 usage() {
   cat <<'EOF'
 用法：
-  sudo bash install.sh --name <节点名称> [--port 31080]
+  sudo bash install.sh [--port 31080]
 
-用户名和密码会在首次安装时自动生成。重复安装会保留已有凭据。
+节点名称默认使用 VPS 公网 IP。用户名和密码会在首次安装时自动生成。
+重复安装会保留已有名称和凭据；特殊情况下可以使用 --name 自定义。
 EOF
 }
 
@@ -53,7 +54,6 @@ if [[ -f $ENV_FILE ]]; then
   password=${password:-$SOCKS_PASSWORD}
 fi
 
-node_name=${node_name:-NODE-01}
 port=${port:-31080}
 
 generate_token() {
@@ -67,7 +67,6 @@ generate_token() {
 username=${username:-"node_$(generate_token | cut -c1-10)"}
 password=${password:-"$(generate_token)"}
 
-[[ $node_name =~ ^[A-Za-z0-9._-]{2,32}$ ]] || die "节点名称格式错误"
 [[ $port =~ ^[0-9]+$ ]] || die "端口必须是数字"
 (( port >= 1024 && port <= 65535 )) || die "端口范围必须为 1024-65535"
 [[ $username =~ ^[A-Za-z0-9._-]{4,32}$ ]] || die "用户名必须为 4-32 位安全字符"
@@ -88,6 +87,14 @@ esac
 for required_command in curl find install sha256sum ss systemctl tar useradd; do
   command -v "$required_command" >/dev/null 2>&1 || die "缺少系统命令：$required_command"
 done
+
+public_ip=$(curl -4 --fail --silent --show-error --max-time 10 https://api.ipify.org 2>/dev/null || true)
+if [[ -z $node_name ]]; then
+  [[ $public_ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] \
+    || die "无法自动获取 VPS 公网 IPv4，请检查网络后重试，或使用 --name 手动指定"
+  node_name=$public_ip
+fi
+[[ $node_name =~ ^[A-Za-z0-9._-]{2,32}$ ]] || die "节点名称格式错误"
 
 port_listener=$(ss -H -lntp | awk -v port=":$port" '$4 ~ port "$" {print}')
 if [[ -n $port_listener && $port_listener != *'"gost"'* ]]; then
@@ -195,7 +202,7 @@ systemctl is-active --quiet gost-socks.service || {
   die "服务启动失败"
 }
 
-public_ip=$(curl --fail --silent --show-error --max-time 10 https://api.ipify.org 2>/dev/null || printf '<VPS公网IP>')
+public_ip=${public_ip:-<VPS公网IP>}
 
 cat <<EOF
 
@@ -212,7 +219,7 @@ GOST SOCKS5 节点安装成功
 ============================================================
 
 下一步：
-1. 在荧光云安全组放行 TCP $port（需要 UDP 时再放行 UDP $port）。
+1. 在萤光云安全组放行 TCP $port，并限制为固定工作出口 IP/32。
 2. 在比特浏览器中填写 VPS 公网 IP、端口、用户名和密码。
 3. 运行 sudo socksctl check 进行基础连通性测试。
 4. 立即将凭据保存到密码管理器，不要提交到 Git。

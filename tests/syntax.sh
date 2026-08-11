@@ -24,6 +24,7 @@ done
 
 grep -q 'port=31080' "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
+grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 if grep -R -nE '130\.94\.102\.34|38\.92\.14\.4|SOCKS_PASSWORD=[^$]' \
   "$project_dir" --exclude-dir=.git --exclude='syntax.sh'; then
   printf '检测到疑似真实节点 IP 或明文密码。\n' >&2

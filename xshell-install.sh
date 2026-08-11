@@ -4,10 +4,10 @@ set -Eeuo pipefail
 usage() {
   cat <<'EOF'
 用法：
-  sudo bash xshell-install.sh --name <节点名称> [--port 31080]
+  sudo bash xshell-install.sh [--port 31080]
 
 此入口适用于 Windows Xshell 登录后的 Ubuntu/Debian 服务器。
-它会补齐基础依赖，再调用同目录的 install.sh。
+它会补齐基础依赖，再调用同目录的 install.sh。节点名称自动使用 VPS 公网 IP。
 EOF
 }
 

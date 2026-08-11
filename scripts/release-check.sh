@@ -15,6 +15,7 @@ release_file="docs/releases/$tag.md"
 
 [[ -f $release_file ]] || { printf '缺少版本说明：%s\n' "$release_file" >&2; exit 1; }
 grep -Fq "## $tag " CHANGELOG.md || { printf 'CHANGELOG 缺少 %s\n' "$tag" >&2; exit 1; }
+grep -Fq "当前推荐稳定版本：\`$tag\`" README.md || { printf 'README 未推荐 %s\n' "$tag" >&2; exit 1; }
 grep -Fq "工具：\`$tag\`" docs/tutorial.md || { printf '完整教程未推荐 %s\n' "$tag" >&2; exit 1; }
 grep -Fq -- "--branch $tag" docs/tutorial.md || { printf '完整教程下载命令未固定 %s\n' "$tag" >&2; exit 1; }
 grep -Fq -- "--branch $tag" docs/windows-xshell.md || { printf 'Xshell 教程下载命令未固定 %s\n' "$tag" >&2; exit 1; }

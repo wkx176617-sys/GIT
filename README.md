@@ -2,7 +2,7 @@
 
 这是一个面向 macOS + Linux VPS 的简化 SOCKS5 部署工具。目标是让每台 VPS 只提供一个直接 SOCKS5 节点，避免 3x-ui、VLESS、v2rayN 副本和多层本地端口造成混淆。
 
-当前推荐稳定版本：`v1.2.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
+当前推荐稳定版本：`v1.2.1`。新节点只使用稳定标签，不直接使用开发中的 `main`。
 
 - [完整搭建教程](docs/tutorial.md)
 - [Windows + Xshell 教程](docs/windows-xshell.md)
@@ -67,13 +67,13 @@ Windows 用户可以使用 Xshell 8 登录 VPS，然后运行项目中的 `xshel
 在 VS Code 终端进入本项目，然后执行：
 
 ```bash
-./deploy.sh root@你的VPS_IP --name MX-01
+./deploy.sh root@你的VPS_IP
 ```
 
 例子：
 
 ```bash
-./deploy.sh root@203.0.113.10 --name MX-01
+./deploy.sh root@203.0.113.10
 ```
 
 脚本会：
@@ -81,14 +81,14 @@ Windows 用户可以使用 Xshell 8 登录 VPS，然后运行项目中的 `xshel
 1. 通过 SSH 将安装文件临时上传到 VPS。
 2. 下载并校验 GOST 官方二进制文件。
 3. 创建低权限系统用户。
-4. 自动生成 SOCKS5 用户名和强密码。
+4. 使用 VPS 公网 IP 作为节点名称，并自动生成 SOCKS5 用户名和强密码。
 5. 创建并启动 `gost-socks.service`。
 6. 输出一张节点连接卡片。
 
 自定义端口（一般不要改）：
 
 ```bash
-./deploy.sh root@你的VPS_IP --name MX-01 --port 31080
+./deploy.sh root@你的VPS_IP --port 31080
 ```
 
 ### 3. 配置萤光云安全组
@@ -132,7 +132,7 @@ sudo socksctl rotate       # 自动生成新密码并重启
 sudo socksctl version      # GOST 版本
 ```
 
-更新到本项目当前固定的 GOST 版本：重新运行同一个 `deploy.sh` 命令。已有节点名称、端口和凭据会被保留。
+更新到本项目当前固定的 GOST 版本：重新运行同一个 `deploy.sh` 命令。已有节点名称、端口和凭据会被保留。新节点名称默认与 VPS 公网 IP 相同，无需额外命名。
 
 如果目标端口已经被 sing-box、x-ui、Xray 或其他程序占用，安装器会停止并显示冲突，不会擅自删除旧服务。先备份和停用旧服务，再重新部署。
 
@@ -157,7 +157,7 @@ US-02  美国节点 2
 所有节点都使用 `31080`。建议在密码管理器中保存：
 
 ```text
-节点名称 / 国家 / VPS IP / 端口 / SOCKS5 用户名 / SOCKS5 密码 / 绑定的浏览器环境
+VPS IP（同时作为节点名称）/ 国家 / 端口 / SOCKS5 用户名 / SOCKS5 密码 / 绑定的浏览器环境
 ```
 
 不要将真实节点表提交到 Git。
