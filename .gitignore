@@ -1,0 +1,7 @@
+# 本项目不保存真实节点、凭据或私钥
+nodes.csv
+nodes.local.*
+*.pem
+*.key
+*.env
+.DS_Store

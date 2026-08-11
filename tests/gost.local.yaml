@@ -1,0 +1,12 @@
+services:
+  - name: "LOCAL-TEST"
+    addr: "127.0.0.1:39080"
+    handler:
+      type: socks5
+      auth:
+        username: "test_user"
+        password: "test_password_123456"
+      metadata:
+        notls: true
+    listener:
+      type: tcp

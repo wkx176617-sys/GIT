@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly CONFIG_DIR="/etc/gost-socks"
+readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
+readonly ENV_FILE="$CONFIG_DIR/node.env"
+readonly SERVICE="gost-socks.service"
+readonly BINARY="/usr/local/lib/gost-socks/gost"
+
+usage() {
+  cat <<'EOF'
+用法：sudo socksctl <命令>
+
+命令：
+  status            查看服务状态
+  check [URL]       检查监听端口和代理出口
+  info              显示节点信息（密码打码）
+  credentials       显示完整账号密码
+  logs [行数]       查看日志，默认 100 行
+  restart           重启服务
+  rotate            自动生成新密码并重启
+  version           查看 GOST 版本
+EOF
+}
+
+die() {
+  printf '错误：%s\n' "$*" >&2
+  exit 1
+}
+
+require_root() {
+  [[ $(id -u) -eq 0 ]] || die "请使用 sudo 运行"
+}
+
+load_env() {
+  require_root
+  [[ -f $ENV_FILE ]] || die "未找到节点配置：$ENV_FILE"
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+}
+
+save_env() {
+  cat >"$ENV_FILE" <<EOF
+NODE_NAME=$NODE_NAME
+SOCKS_PORT=$SOCKS_PORT
+SOCKS_USERNAME=$SOCKS_USERNAME
+SOCKS_PASSWORD=$SOCKS_PASSWORD
+EOF
+  chmod 0600 "$ENV_FILE"
+}
+
+render_config() {
+  cat >"$CONFIG_FILE" <<EOF
+services:
+  - name: "$NODE_NAME"
+    addr: ":$SOCKS_PORT"
+    handler:
+      type: socks5
+      auth:
+        username: "$SOCKS_USERNAME"
+        password: "$SOCKS_PASSWORD"
+      metadata:
+        notls: true
+    listener:
+      type: tcp
+EOF
+  chown root:gost-socks "$CONFIG_FILE"
+  chmod 0640 "$CONFIG_FILE"
+}
+
+command_name=${1:-help}
+shift || true
+
+case "$command_name" in
+  status)
+    require_root
+    systemctl --no-pager --full status "$SERVICE"
+    ;;
+  check)
+    load_env
+    test_url=${1:-https://api.ipify.org}
+    [[ $test_url == https://* ]] || die "测试 URL 必须使用 https://"
+    systemctl is-active --quiet "$SERVICE" || die "服务未运行"
+    if command -v ss >/dev/null 2>&1; then
+      ss -lnt | awk -v port=":$SOCKS_PORT" '$4 ~ port "$" {found=1} END {exit !found}' \
+        || die "未检测到 TCP 监听端口 $SOCKS_PORT"
+    fi
+    printf '服务状态：运行中\n监听端口：%s\n' "$SOCKS_PORT"
+    printf '代理出口：'
+    curl --fail --silent --show-error --max-time 20 \
+      --socks5-hostname "127.0.0.1:$SOCKS_PORT" \
+      --proxy-user "$SOCKS_USERNAME:$SOCKS_PASSWORD" \
+      "$test_url"
+    printf '\n基础检查通过。\n'
+    ;;
+  info)
+    load_env
+    printf '节点名称：%s\n端口：%s\n用户名：%s\n密码：********\n' \
+      "$NODE_NAME" "$SOCKS_PORT" "$SOCKS_USERNAME"
+    ;;
+  credentials)
+    load_env
+    printf '节点名称：%s\n端口：%s\n用户名：%s\n密码：%s\n' \
+      "$NODE_NAME" "$SOCKS_PORT" "$SOCKS_USERNAME" "$SOCKS_PASSWORD"
+    ;;
+  logs)
+    require_root
+    lines=${1:-100}
+    [[ $lines =~ ^[0-9]+$ ]] || die "日志行数必须是数字"
+    journalctl -u "$SERVICE" -n "$lines" --no-pager
+    ;;
+  restart)
+    require_root
+    systemctl restart "$SERVICE"
+    systemctl is-active --quiet "$SERVICE" || die "服务重启失败"
+    printf '服务已重启。\n'
+    ;;
+  rotate)
+    load_env
+    if command -v openssl >/dev/null 2>&1; then
+      SOCKS_PASSWORD=$(openssl rand -hex 16)
+    else
+      SOCKS_PASSWORD=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+    fi
+    save_env
+    render_config
+    systemctl restart "$SERVICE"
+    systemctl is-active --quiet "$SERVICE" || die "新密码生效后服务启动失败"
+    printf '密码已更新：%s\n请立即更新比特浏览器并保存到密码管理器。\n' "$SOCKS_PASSWORD"
+    ;;
+  version)
+    require_root
+    "$BINARY" -V
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  *)
+    usage >&2
+    die "未知命令：$command_name"
+    ;;
+esac
