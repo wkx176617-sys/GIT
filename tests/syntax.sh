@@ -9,6 +9,7 @@ files=(
   "$project_dir/install.sh"
   "$project_dir/uninstall.sh"
   "$project_dir/scripts/socksctl"
+  "$project_dir/scripts/release-check.sh"
 )
 
 for file in "${files[@]}"; do

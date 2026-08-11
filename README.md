@@ -2,6 +2,14 @@
 
 这是一个面向 macOS + Linux VPS 的简化 SOCKS5 部署工具。目标是让每台 VPS 只提供一个直接 SOCKS5 节点，避免 3x-ui、VLESS、v2rayN 副本和多层本地端口造成混淆。
 
+当前推荐稳定版本：`v1.2.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
+
+- [完整搭建教程](docs/tutorial.md)
+- [Windows + Xshell 教程](docs/windows-xshell.md)
+- [各版本详细说明](docs/releases/)
+- [版本维护规则](docs/version-policy.md)
+- [发布新版本清单](RELEASING.md)
+
 ## 推荐架构
 
 ```text
@@ -20,6 +28,8 @@
 - 架构：Linux `amd64`、`arm64`
 - GOST：固定使用官方稳定版 `3.2.6`，下载后校验 SHA-256
 - 协议：标准 SOCKS5、用户名/密码、TCP
+
+新服务器优先选择 Ubuntu 24.04 LTS `amd64`；现有 Ubuntu 22.04 LTS 节点不需要为了本工具重装或升级系统。
 
 ## Mac 准备
 
@@ -184,6 +194,11 @@ install.sh               VPS 安装/升级脚本
 uninstall.sh             VPS 卸载脚本
 scripts/socksctl         VPS 管理命令
 docs/windows-xshell.md   Windows + Xshell 图文式步骤
+docs/tutorial.md         完整搭建、验收与维护教程
+docs/releases/           每个稳定版本的独立说明
+docs/version-policy.md   固定版本维护规则
 CHANGELOG.md             稳定版本更新记录
+RELEASING.md             新版本发布清单
+VERSION                  当前推荐版本号
 tests/syntax.sh          Shell 语法和帮助信息测试
 ```
