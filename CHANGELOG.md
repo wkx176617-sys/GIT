@@ -1,0 +1,16 @@
+# 更新记录
+
+## v1.1.0 - 2026-08-11
+
+- 新增 Windows + Xshell 部署入口 `xshell-install.sh`。
+- 新增固定版本下载、Xftp/SFTP 上传、安全组和日常维护指南。
+- Xshell 入口自动补齐 Ubuntu/Debian 所需基础依赖。
+- 保持原有 macOS `deploy.sh` 用法不变。
+
+## v1.0.0 - 2026-08-11
+
+- 首个稳定版本。
+- 支持从 macOS 通过 SSH/SCP 部署单端口 GOST SOCKS5。
+- 默认统一使用 `31080/TCP`。
+- 提供安装、卸载、状态检查、日志和密码轮换工具。
+- 固定并校验官方 GOST 3.2.6。

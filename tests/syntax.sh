@@ -5,6 +5,7 @@ project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
 files=(
   "$project_dir/deploy.sh"
+  "$project_dir/xshell-install.sh"
   "$project_dir/install.sh"
   "$project_dir/uninstall.sh"
   "$project_dir/scripts/socksctl"
@@ -15,6 +16,7 @@ for file in "${files[@]}"; do
 done
 
 "$project_dir/deploy.sh" --help >/dev/null
+"$project_dir/xshell-install.sh" --help >/dev/null
 "$project_dir/install.sh" --help >/dev/null
 "$project_dir/uninstall.sh" --help >/dev/null
 "$project_dir/scripts/socksctl" --help >/dev/null

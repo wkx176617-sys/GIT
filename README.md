@@ -31,6 +31,14 @@
 
 不需要安装 Xshell、v2rayN、3x-ui、GOST、Go 或 Docker。
 
+## Windows + Xshell
+
+Windows 用户可以使用 Xshell 8 登录 VPS，然后运行项目中的 `xshell-install.sh`。Windows 本机不需要 Bash、Go、GOST 或 Docker。
+
+完整步骤见：[Windows + Xshell 部署指南](docs/windows-xshell.md)。
+
+各版本变化见：[更新记录](CHANGELOG.md)。
+
 ## 第一次部署
 
 ### 1. 确认 VPS 信息
@@ -171,8 +179,11 @@ SOCKS5 服务端只有在客户端发送“域名”请求时才能代为解析 
 
 ```text
 deploy.sh                Mac 端部署入口
+xshell-install.sh        Windows Xshell 登录后的部署入口
 install.sh               VPS 安装/升级脚本
 uninstall.sh             VPS 卸载脚本
 scripts/socksctl         VPS 管理命令
+docs/windows-xshell.md   Windows + Xshell 图文式步骤
+CHANGELOG.md             稳定版本更新记录
 tests/syntax.sh          Shell 语法和帮助信息测试
 ```
