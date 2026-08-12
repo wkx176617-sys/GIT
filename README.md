@@ -2,7 +2,7 @@
 
 这是一个面向 macOS + Linux VPS 的简化 SOCKS5 部署工具。目标是让每台 VPS 只提供一个直接 SOCKS5 节点，避免 3x-ui、VLESS、v2rayN 副本和多层本地端口造成混淆。
 
-当前推荐稳定版本：`v1.4.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
+当前推荐稳定版本：`v1.5.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
 
 > 网络检测公告：[当前设备与比特窗口网络检测网站](docs/announcements/network-check-links.md)
 
@@ -76,6 +76,22 @@ sudo bash overwrite.sh --port 31080
 占用强行覆写。
 
 各版本变化见：[更新记录](CHANGELOG.md)。
+
+## 可选 BBR 加速插件
+
+仓库提供独立的 [BBR + FQ 插件](addons/bbr/README.md)，插件版本为 `1.0.0`。它兼容当前
+`main`/`v1.x`，但不属于 SOCKS5 主程序：主程序安装、升级和覆写都不会自动安装或启用它。
+
+```bash
+cd /root/socks5-toolkit/addons/bbr
+bash install.sh       # 只安装管理命令，不改变网络
+bbrctl check          # 只读质检
+bbrctl enable         # 确认需要后才启用
+bbrctl restore        # 恢复首次启用前的设置
+```
+
+插件不开放端口、不改变 IP、GOST、SOCKS5 凭据或安全组。线路正常时继续使用 Ubuntu 默认
+`cubic` 即可，不需要为了“已安装插件”而强制开启。
 
 ## 第一次部署
 
@@ -224,4 +240,5 @@ CHANGELOG.md             稳定版本更新记录
 RELEASING.md             新版本发布清单
 VERSION                  当前推荐版本号
 tests/syntax.sh          Shell 语法和帮助信息测试
+addons/bbr/              独立可选的 BBR + FQ 插件、兼容声明和说明
 ```

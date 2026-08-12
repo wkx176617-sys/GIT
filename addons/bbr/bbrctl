@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly STATE_DIR="/var/lib/gost-socks-bbr"
+readonly STATE_FILE="$STATE_DIR/original.conf"
+readonly SYSCTL_FILE="/etc/sysctl.d/99-gost-socks-bbr.conf"
+
+usage() {
+  cat <<'EOF'
+用法：sudo bbrctl <命令>
+
+命令：
+  status    查看当前拥塞算法、队列规则和插件状态（只读）
+  check     检查 Ubuntu、内核与 BBR 支持情况（只读）
+  enable    保存当前设置并启用 BBR + FQ
+  restore   恢复首次启用前的设置
+EOF
+}
+
+die() { printf '错误：%s\n' "$*" >&2; exit 1; }
+require_root() { [[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"; }
+
+read_sysctl() {
+  sysctl -n "$1" 2>/dev/null || true
+}
+
+check_platform() {
+  [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  [[ ${ID:-} == ubuntu ]] || die "BBR 插件当前只支持 Ubuntu"
+  case "${VERSION_ID:-}" in
+    20.04|22.04|24.04) ;;
+    *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|amd64|aarch64|arm64) ;;
+    *) die "当前只支持 amd64/arm64" ;;
+  esac
+  command -v sysctl >/dev/null 2>&1 || die "缺少 sysctl（procps）"
+}
+
+load_bbr() {
+  if command -v modprobe >/dev/null 2>&1; then
+    modprobe tcp_bbr 2>/dev/null || true
+  fi
+}
+
+verify_bbr_available() {
+  local available
+  available=$(read_sysctl net.ipv4.tcp_available_congestion_control)
+  [[ " $available " == *" bbr "* ]] \
+    || die "当前内核没有提供 BBR；插件不会替换内核，请保持 cubic"
+}
+
+verify_bbr_supported() {
+  local available
+  available=$(read_sysctl net.ipv4.tcp_available_congestion_control)
+  if [[ " $available " == *" bbr "* ]]; then
+    return
+  fi
+  command -v modinfo >/dev/null 2>&1 && modinfo tcp_bbr >/dev/null 2>&1 \
+    || die "当前内核没有提供 BBR；插件不会替换内核，请保持 cubic"
+}
+
+save_original_once() {
+  [[ -f $STATE_FILE ]] && return
+  local original_qdisc original_cc
+  original_qdisc=$(read_sysctl net.core.default_qdisc)
+  original_cc=$(read_sysctl net.ipv4.tcp_congestion_control)
+  [[ $original_qdisc =~ ^[A-Za-z0-9_-]+$ ]] || die "无法读取原队列规则"
+  [[ $original_cc =~ ^[A-Za-z0-9_-]+$ ]] || die "无法读取原拥塞算法"
+  install -d -m 0700 "$STATE_DIR"
+  printf 'ORIGINAL_QDISC=%s\nORIGINAL_CC=%s\n' "$original_qdisc" "$original_cc" >"$STATE_FILE"
+  chmod 0600 "$STATE_FILE"
+}
+
+read_original() {
+  [[ -f $STATE_FILE ]] || die "没有首次启用记录，无法确定应恢复的设置"
+  ORIGINAL_QDISC=$(awk -F= '$1 == "ORIGINAL_QDISC" {print $2}' "$STATE_FILE")
+  ORIGINAL_CC=$(awk -F= '$1 == "ORIGINAL_CC" {print $2}' "$STATE_FILE")
+  [[ $ORIGINAL_QDISC =~ ^[A-Za-z0-9_-]+$ ]] || die "恢复记录中的队列规则格式错误"
+  [[ $ORIGINAL_CC =~ ^[A-Za-z0-9_-]+$ ]] || die "恢复记录中的拥塞算法格式错误"
+}
+
+command_name=${1:-help}
+shift || true
+[[ $# -eq 0 ]] || die "命令不接受额外参数"
+
+case "$command_name" in
+  status)
+    printf '当前拥塞算法：%s\n' "$(read_sysctl net.ipv4.tcp_congestion_control)"
+    printf '当前队列规则：%s\n' "$(read_sysctl net.core.default_qdisc)"
+    printf '内核可用算法：%s\n' "$(read_sysctl net.ipv4.tcp_available_congestion_control)"
+    if [[ -f $SYSCTL_FILE ]]; then
+      printf '插件状态：已写入持久配置\n'
+    else
+      printf '插件状态：未启用\n'
+    fi
+    ;;
+  check)
+    check_platform
+    verify_bbr_supported
+    printf '质检通过：系统和内核支持 BBR。当前设置如下：\n'
+    "$0" status
+    ;;
+  enable)
+    require_root
+    check_platform
+    load_bbr
+    verify_bbr_available
+    save_original_once
+    rollback_enable() {
+      read_original
+      rm -f -- "$SYSCTL_FILE"
+      sysctl -w "net.core.default_qdisc=$ORIGINAL_QDISC" >/dev/null 2>&1 || true
+      sysctl -w "net.ipv4.tcp_congestion_control=$ORIGINAL_CC" >/dev/null 2>&1 || true
+      printf '启用失败，已尝试恢复原网络设置。\n' >&2
+    }
+    trap rollback_enable ERR
+    cat >"$SYSCTL_FILE" <<'EOF'
+# Managed by the optional gost-socks-bbr plugin.
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+EOF
+    sysctl -p "$SYSCTL_FILE" >/dev/null
+    [[ $(read_sysctl net.core.default_qdisc) == fq ]] || die "FQ 启用失败"
+    [[ $(read_sysctl net.ipv4.tcp_congestion_control) == bbr ]] || die "BBR 启用失败"
+    trap - ERR
+    printf 'BBR + FQ 已启用并持久化；新建 TCP 连接会使用新设置。\n'
+    "$0" status
+    ;;
+  restore)
+    require_root
+    check_platform
+    read_original
+    rm -f -- "$SYSCTL_FILE"
+    sysctl -w "net.core.default_qdisc=$ORIGINAL_QDISC" >/dev/null
+    sysctl -w "net.ipv4.tcp_congestion_control=$ORIGINAL_CC" >/dev/null
+    printf '已恢复首次启用前的设置：%s + %s。\n' "$ORIGINAL_CC" "$ORIGINAL_QDISC"
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  *)
+    usage >&2
+    die "未知命令：$command_name"
+    ;;
+esac

@@ -12,6 +12,9 @@ files=(
   "$project_dir/uninstall.sh"
   "$project_dir/scripts/socksctl"
   "$project_dir/scripts/release-check.sh"
+  "$project_dir/addons/bbr/bbrctl"
+  "$project_dir/addons/bbr/install.sh"
+  "$project_dir/addons/bbr/uninstall.sh"
 )
 
 for file in "${files[@]}"; do
@@ -25,6 +28,9 @@ done
 "$project_dir/overwrite.sh" --help >/dev/null
 "$project_dir/uninstall.sh" --help >/dev/null
 "$project_dir/scripts/socksctl" --help >/dev/null
+"$project_dir/addons/bbr/bbrctl" --help >/dev/null
+"$project_dir/addons/bbr/install.sh" --help >/dev/null
+"$project_dir/addons/bbr/uninstall.sh" --help >/dev/null
 
 grep -q 'port=31080' "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
@@ -34,6 +40,18 @@ grep -q '20.04|22.04|24.04' "$project_dir/preflight.sh"
 grep -q '/root/gost-socks-backups' "$project_dir/overwrite.sh"
 grep -q 'systemctl disable --now sing-box' "$project_dir/overwrite.sh"
 grep -q 'trap rollback ERR' "$project_dir/overwrite.sh"
+grep -q '^PLUGIN_VERSION=1.0.0$' "$project_dir/addons/bbr/plugin.conf"
+grep -q '^MAIN_MIN_VERSION=1.4.0$' "$project_dir/addons/bbr/plugin.conf"
+grep -q '^MAIN_MAX_MAJOR=1$' "$project_dir/addons/bbr/plugin.conf"
+grep -q 'net.ipv4.tcp_congestion_control = bbr' "$project_dir/addons/bbr/bbrctl"
+grep -q 'net.core.default_qdisc = fq' "$project_dir/addons/bbr/bbrctl"
+grep -q 'trap rollback_enable ERR' "$project_dir/addons/bbr/bbrctl"
+if rg -n 'bbrctl|addons/bbr|tcp_congestion_control' \
+  "$project_dir/deploy.sh" "$project_dir/install.sh" "$project_dir/xshell-install.sh" \
+  "$project_dir/preflight.sh" "$project_dir/overwrite.sh" "$project_dir/scripts/socksctl"; then
+  printf 'BBR 插件被主程序直接调用，不再是独立插件。\n' >&2
+  exit 1
+fi
 
 if command -v jq >/dev/null 2>&1; then
   legacy_config="$project_dir/tests/sing-box.legacy.json"

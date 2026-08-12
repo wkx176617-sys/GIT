@@ -2,7 +2,7 @@
 
 ## 推荐版本
 
-- 部署工具：`v1.4.0`（稳定版）
+- 部署工具：`v1.5.0`（稳定版）
 - 代理核心：GOST `3.2.6`（脚本固定版本并验证 SHA-256）
 - 推荐系统：Ubuntu 24.04 LTS `amd64`；已有 Ubuntu 22.04 节点可以继续使用
 - Windows 终端：Xshell 8
@@ -57,7 +57,7 @@ ss -lntp
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.4.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.5.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 cd /root/socks5-toolkit
 bash xshell-install.sh --port 31080
 ```
@@ -65,7 +65,7 @@ bash xshell-install.sh --port 31080
 ## 四、从 macOS 安装
 
 ```bash
-git clone --branch v1.4.0 --depth 1 git@github.com:wkx176617-sys/GIT.git
+git clone --branch v1.5.0 --depth 1 git@github.com:wkx176617-sys/GIT.git
 cd GIT
 ./deploy.sh root@VPS公网IP --port 31080
 ```
@@ -217,6 +217,28 @@ bash xshell-install.sh --port 31080
 ```
 
 不要使用 `git reset --hard` 清理服务器目录。
+
+## 十一、可选 BBR + FQ 插件
+
+BBR 插件位于 `addons/bbr/`，与主程序分离。主程序更新不会自动启用它。只有线路确实存在
+高延迟、丢包或吞吐问题时才考虑使用：
+
+```bash
+cd /root/socks5-toolkit/addons/bbr
+bash install.sh
+bbrctl check
+bbrctl enable
+```
+
+查看状态或恢复：
+
+```bash
+bbrctl status
+bbrctl restore
+```
+
+首次启用会保存当前设置，失败时尝试回退。它不会修改 SOCKS5 节点，也不能改善 IP 质量、
+DNS/WebRTC 隔离或加密。完整说明见 [BBR 插件教程](../addons/bbr/README.md)。
 
 ## 版本选择依据
 

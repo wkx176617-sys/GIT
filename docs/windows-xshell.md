@@ -38,7 +38,7 @@ root@server:~#
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.4.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.5.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 cd /root/socks5-toolkit
 ```
 
@@ -56,7 +56,7 @@ bash xshell-install.sh --port 31080
 
 如果服务器无法访问 GitHub：
 
-1. 在 Windows 下载本项目 `v1.4.0` 源码压缩包并解压。
+1. 在 Windows 下载本项目 `v1.5.0` 源码压缩包并解压。
 2. 在已连接的 Xshell 中选择“窗口 → 新建文件传输”，或者打开远程文件管理器。
 3. 将整个项目文件夹上传到 `/root/socks5-toolkit`。
 4. 回到 Xshell 执行：
@@ -77,6 +77,19 @@ bash xshell-install.sh --port 31080 --overwrite
 覆写，先确认旧服务用途。
 
 Xshell 8 官方支持远程文件管理器，并可与 Xftp 通过 SFTP 上传文件。
+
+## 可选 BBR 插件
+
+BBR 插件不会随 SOCKS5 自动启用。需要时在 Xshell 中单独执行：
+
+```bash
+cd /root/socks5-toolkit/addons/bbr
+bash install.sh
+bbrctl check
+bbrctl enable
+```
+
+恢复原设置运行 `bbrctl restore`。完整说明见项目中的 `addons/bbr/README.md`。
 
 ## 云安全组
 
