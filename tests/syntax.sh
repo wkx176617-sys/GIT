@@ -40,7 +40,7 @@ grep -q 'port=31080' "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.6.2"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.7.0"' "$project_dir/install.sh"
 grep -q '安全跳过' "$project_dir/install.sh"
 grep -q 'gost-socks-main.lock' "$project_dir/install.sh"
 grep -q 'INSTALL_UNKNOWN' "$project_dir/install.sh"
@@ -81,6 +81,13 @@ if rg -n 'bbrctl|addons/bbr|tcp_congestion_control' \
   "$project_dir/deploy.sh" "$project_dir/install.sh" "$project_dir/xshell-install.sh" \
   "$project_dir/preflight.sh" "$project_dir/overwrite.sh" "$project_dir/scripts/socksctl"; then
   printf 'BBR 插件被主程序直接调用，不再是独立插件。\n' >&2
+  exit 1
+fi
+if rg -n 'crontab|/etc/cron|systemctl[[:space:]]+(enable|start).*\.timer|docker[[:space:]]+run|podman[[:space:]]+run' \
+  "$project_dir/deploy.sh" "$project_dir/install.sh" "$project_dir/xshell-install.sh" \
+  "$project_dir/preflight.sh" "$project_dir/overwrite.sh" "$project_dir/scripts/socksctl" \
+  "$project_dir/scripts/socks-doctor" "$project_dir/scripts/socks-safety"; then
+  printf '核心程序引入了定时任务、容器或后台调度，违反轻量架构边界。\n' >&2
   exit 1
 fi
 

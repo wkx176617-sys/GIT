@@ -2,16 +2,27 @@
 
 这是一个面向 macOS + Linux VPS 的简化 SOCKS5 部署工具。目标是让每台 VPS 只提供一个直接 SOCKS5 节点，避免 3x-ui、VLESS、v2rayN 副本和多层本地端口造成混淆。
 
-当前推荐稳定版本：`v1.6.2`。新节点只使用稳定标签，不直接使用开发中的 `main`。
+当前推荐稳定版本：`v1.7.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
 
 > 网络检测公告：[当前设备与比特窗口网络检测网站](docs/announcements/network-check-links.md)
 
 - [完整搭建教程](docs/tutorial.md)
 - [Windows + Xshell 教程](docs/windows-xshell.md)
 - [手动检查、维修与 Codex 求助教程](docs/troubleshooting.md)
+- [项目宗旨与开发边界](docs/project-principles.md)
+- [轻量模块架构](docs/architecture.md)
 - [各版本详细说明](docs/releases/)
 - [版本维护规则](docs/version-policy.md)
 - [发布新版本清单](RELEASING.md)
+
+## 项目宗旨
+
+> 防呆适合新手，扩展彼此隔离，运行稳定轻量，步骤少且教程完整；问题能够记录和复盘，
+> 但不为了功能数量让代码无限复杂。
+
+正常运行时只有 GOST 是必要的常驻业务进程。诊断、报告、恢复和中文菜单均按需执行；本项目
+不安装数据库、Web 面板、定时扫描器或集中调度器。非必要能力优先放入 `addons/`，主程序
+不会自动启用插件。详细边界和性能预算见[项目宗旨](docs/project-principles.md)。
 
 ## 推荐架构
 

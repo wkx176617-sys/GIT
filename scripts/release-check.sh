@@ -14,11 +14,23 @@ tag="v$version"
 release_file="docs/releases/$tag.md"
 
 [[ -f $release_file ]] || { printf '缺少版本说明：%s\n' "$release_file" >&2; exit 1; }
+[[ -f docs/project-principles.md && -f docs/architecture.md ]] \
+  || { printf '缺少项目宗旨或轻量模块架构说明\n' >&2; exit 1; }
 grep -Fq "## $tag " CHANGELOG.md || { printf 'CHANGELOG 缺少 %s\n' "$tag" >&2; exit 1; }
 grep -Fq "当前推荐稳定版本：\`$tag\`" README.md || { printf 'README 未推荐 %s\n' "$tag" >&2; exit 1; }
 grep -Fq "工具：\`$tag\`" docs/tutorial.md || { printf '完整教程未推荐 %s\n' "$tag" >&2; exit 1; }
 grep -Fq -- "--branch $tag" docs/tutorial.md || { printf '完整教程下载命令未固定 %s\n' "$tag" >&2; exit 1; }
 grep -Fq -- "--branch $tag" docs/windows-xshell.md || { printf 'Xshell 教程下载命令未固定 %s\n' "$tag" >&2; exit 1; }
+grep -Fq '## 复杂度与性能影响' "$release_file" \
+  || { printf '版本说明缺少“复杂度与性能影响”\n' >&2; exit 1; }
+grep -Fq 'GOST 是唯一必要的常驻业务进程' docs/project-principles.md \
+  || { printf '项目宗旨缺少常驻进程边界\n' >&2; exit 1; }
+grep -Fq '新功能默认先评估能否作为插件' docs/project-principles.md \
+  || { printf '项目宗旨缺少插件优先规则\n' >&2; exit 1; }
+grep -Fq '功能变多不等于 2.0' docs/project-principles.md \
+  || { printf '项目宗旨缺少主版本准入规则\n' >&2; exit 1; }
+grep -Fq '正常工作时只有 GOST 常驻' docs/architecture.md \
+  || { printf '架构说明缺少按需运行边界\n' >&2; exit 1; }
 [[ -f addons/bbr/plugin.conf && -f addons/bbr/README.md ]] \
   || { printf '缺少 BBR 插件兼容声明或说明\n' >&2; exit 1; }
 # shellcheck disable=SC1091
