@@ -6,9 +6,9 @@ readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
 readonly SERVICE="gost-socks.service"
 readonly BINARY="/usr/local/lib/gost-socks/gost"
-readonly SAFETY="/usr/local/sbin/socks-safety"
-readonly DOCTOR="/usr/local/sbin/socks-doctor"
-readonly LOCK_FILE="/run/lock/gost-socks-main.lock"
+readonly SAFETY="${SOCKS_SAFETY_BIN:-/usr/local/sbin/socks-safety}"
+readonly DOCTOR="${SOCKS_DOCTOR_BIN:-/usr/local/sbin/socks-doctor}"
+readonly LOCK_FILE="${SOCKS_LOCK_FILE:-/run/lock/gost-socks-main.lock}"
 
 usage() {
   cat <<'EOF'
@@ -31,6 +31,7 @@ usage() {
   incidents [数量] 查询最近故障记录，默认 20 条
   snapshots         查看最后可用和前一可用快照
   note              交互式记录暂时无法归类的现象
+  report            生成可交给 Codex 的脱敏故障报告
 EOF
 }
 
@@ -208,14 +209,10 @@ case "$command_name" in
     acquire_lock
     [[ -x $SAFETY && -x $DOCTOR ]] || die "安全组件不完整，请先升级主程序"
     if ! systemctl restart "$SERVICE" || ! systemctl is-active --quiet "$SERVICE"; then
-      incident_id=$($SAFETY incident RESTART_FAILED restore pending service-restart-failed)
-      if "$SAFETY" restore && "$DOCTOR" --local; then
-        "$SAFETY" incident RESTART_RECOVERED restore success "parent-$incident_id" >/dev/null
-        printf '服务重启失败，事件 %s 已记录，并已恢复最后可用状态。\n' "$incident_id"
-        exit 0
-      fi
-      "$SAFETY" incident RESTART_RECOVERY_FAILED restore failed "parent-$incident_id" >/dev/null 2>&1 || true
-      die "服务重启及自动恢复均失败；事件编号：$incident_id"
+      incident_id=$($SAFETY incident RESTART_FAILED stopped needs-review service-restart-failed)
+      printf '服务重启失败，但原因尚未确定，因此没有自动恢复或覆写配置。\n' >&2
+      printf '事件编号：%s。请运行 socksctl report，并按照手动维修教程检查。\n' "$incident_id" >&2
+      exit 1
     fi
     printf '服务已重启。\n'
     ;;
@@ -268,11 +265,37 @@ case "$command_name" in
     require_root
     acquire_lock
     [[ -x $SAFETY && -x $DOCTOR ]] || die "安全组件不完整，请先升级主程序"
-    if "$DOCTOR" --local; then
+    doctor_status=0
+    doctor_output=$("$DOCTOR" --local 2>&1) || doctor_status=$?
+    printf '%s\n' "$doctor_output"
+    if [[ $doctor_status -eq 0 ]]; then
       printf '本地协议状态正常，无需维修。\n'
       exit 0
     fi
-    incident_id=$($SAFETY incident HEAL_STARTED restore pending local-deterministic-failure)
+
+    failure_codes=$(printf '%s\n' "$doctor_output" \
+      | sed -n 's/^故障 \[\([^]]*\)\].*/\1/p' | sort -u | paste -sd, -)
+    repairable_root=false
+    blocked_code=""
+    IFS=, read -r -a detected_codes <<<"$failure_codes"
+    for detected_code in "${detected_codes[@]}"; do
+      case "$detected_code" in
+        CONFIG_MISSING|CONFIG_PERMISSION|CONFIG_MISMATCH) repairable_root=true ;;
+        SERVICE_DOWN|PORT_NOT_LISTENING) ;;
+        "") blocked_code=UNCLASSIFIED ;;
+        *) blocked_code=$detected_code ;;
+      esac
+    done
+    if [[ -z $failure_codes || $repairable_root != true || -n $blocked_code ]]; then
+      incident_id=$($SAFETY incident HEAL_BLOCKED_UNCERTAIN stopped needs-review \
+        "codes-${failure_codes:-unclassified}")
+      printf '\n自动维修已停止：检测结果不在安全白名单内，或没有足够证据确认原因。\n' >&2
+      printf '当前协议配置未被覆写。事件编号：%s。\n' "$incident_id" >&2
+      printf '下一步：运行 socksctl report，并把报告内容和实际现象一起提供给 Codex。\n' >&2
+      exit 2
+    fi
+
+    incident_id=$($SAFETY incident HEAL_STARTED restore pending "whitelisted-$failure_codes")
     if "$SAFETY" restore && "$DOCTOR" --local; then
       "$SAFETY" incident HEAL_COMPLETE restore success "parent-$incident_id" >/dev/null
       printf '维修完成，事件编号：%s。已恢复最后可用状态。\n' "$incident_id"
@@ -320,6 +343,75 @@ case "$command_name" in
     [[ -n $observation ]] || die "描述不能为空"
     incident_id=$($SAFETY incident USER_OBSERVATION observe recorded "$observation")
     printf '已保存为事件 %s。可运行 socksctl incidents %s 查询。\n' "$incident_id" "$incident_id"
+    ;;
+  report)
+    require_root
+    [[ $# -eq 0 ]] || die "report 不接受参数"
+    [[ -x $SAFETY && -x $DOCTOR ]] || die "安全组件不完整，请先升级主程序"
+    umask 077
+    report_env_value() {
+      local key=$1
+      awk -F= -v wanted="$key" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' \
+        "$ENV_FILE" 2>/dev/null || true
+    }
+    report_node_name=$(report_env_value NODE_NAME)
+    report_public_ip=$(report_env_value PUBLIC_IP)
+    report_port=$(report_env_value SOCKS_PORT)
+    report_username=$(report_env_value SOCKS_USERNAME)
+    report_password=$(report_env_value SOCKS_PASSWORD)
+    report_tool_version=$(report_env_value TOOL_VERSION)
+    [[ $report_node_name =~ ^[A-Za-z0-9._-]{2,32}$ ]] || report_node_name=unknown
+    [[ $report_public_ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || report_public_ip=""
+    [[ $report_port =~ ^[0-9]+$ ]] || report_port=unknown
+    [[ $report_tool_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || report_tool_version=unknown
+    [[ $report_username =~ ^[A-Za-z0-9._-]{4,32}$ ]] \
+      || report_username=__NO_VALID_USERNAME_TO_REDACT__
+    [[ $report_password =~ ^[A-Za-z0-9._-]{16,64}$ ]] \
+      || report_password=__NO_VALID_PASSWORD_TO_REDACT__
+    report_time=$(date -u +%Y%m%dT%H%M%SZ)
+    raw_report=$(mktemp "/root/.gost-socks-report.${report_time}.XXXXXX")
+    report_file="/root/gost-socks-report-${report_time}-${BASHPID:-$$}.txt"
+    cleanup_report() { rm -f -- "${raw_report:-}"; }
+    trap cleanup_report EXIT
+    chmod 0600 "$raw_report"
+    doctor_status=0
+    doctor_output=$("$DOCTOR" 2>&1) || doctor_status=$?
+    {
+      printf '=== GOST SOCKS5 脱敏故障报告 ===\n'
+      printf '生成时间(UTC)：%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      printf '工具版本：%s\n' "${report_tool_version:-unknown}"
+      printf '节点：%s:%s\n' "${report_public_ip:-${report_node_name:-unknown}}" "$report_port"
+      printf '诊断退出状态：%s\n\n' "$doctor_status"
+      printf '%s\n' '--- 系统 ---'
+      awk -F= '$1 == "PRETTY_NAME" {gsub(/"/, "", $2); print "系统：" $2}' /etc/os-release 2>/dev/null || true
+      printf '内核：%s\n' "$(uname -srmo 2>/dev/null || true)"
+      printf '运行时间：%s\n' "$(uptime -p 2>/dev/null || true)"
+      df -h / 2>/dev/null || true
+      free -h 2>/dev/null || true
+      printf '\n%s\n' '--- 服务摘要 ---'
+      systemctl show "$SERVICE" -p ActiveState -p SubState -p Result -p NRestarts -p ExecMainStatus 2>/dev/null || true
+      if [[ $report_port != unknown ]]; then
+        ss -H -lntp 2>/dev/null | awk -v port=":$report_port" '$4 ~ port "$" {print}' || true
+      fi
+      printf '\n%s\n%s\n' '--- 健康诊断 ---' "$doctor_output"
+      printf '\n%s\n' '--- 健康快照 ---'
+      "$SAFETY" snapshots 2>&1 || true
+      printf '\n%s\n' '--- 最近 50 条事件 ---'
+      "$SAFETY" incidents 50 2>&1 || true
+      printf '\n%s\n' '--- GOST 最近 80 行日志 ---'
+      journalctl -u "$SERVICE" -n 80 --no-pager 2>&1 || true
+      printf '\n说明：报告不会读取 SSH 私钥，也不会主动写出 SOCKS5 密码；发送前仍请人工检查。\n'
+    } >"$raw_report"
+    escaped_password=${report_password//./\\.}
+    escaped_username=${report_username//./\\.}
+    sed -e "s/$escaped_password/[REDACTED_PASSWORD]/g" \
+        -e "s/$escaped_username/[REDACTED_USER]/g" \
+        "$raw_report" >"$report_file"
+    chmod 0600 "$report_file"
+    rm -f -- "$raw_report"
+    trap - EXIT
+    printf '脱敏报告已生成：%s\n' "$report_file"
+    printf '先运行 cat %s 人工检查，再把从标题到结尾的完整内容提供给 Codex。\n' "$report_file"
     ;;
   help|--help|-h)
     usage

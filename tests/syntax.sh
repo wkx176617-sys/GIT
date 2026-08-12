@@ -40,10 +40,23 @@ grep -q 'port=31080' "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.6.0"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.6.1"' "$project_dir/install.sh"
 grep -q '安全跳过' "$project_dir/install.sh"
 grep -q 'gost-socks-main.lock' "$project_dir/install.sh"
 grep -q 'INSTALL_UNKNOWN' "$project_dir/install.sh"
+grep -q 'HEAL_BLOCKED_UNCERTAIN' "$project_dir/scripts/socksctl"
+grep -q 'CONFIG_MISSING|CONFIG_PERMISSION|CONFIG_MISMATCH' "$project_dir/scripts/socksctl"
+grep -q 'PORT_CONFLICT' "$project_dir/scripts/socks-doctor"
+grep -q 'CONFIG_INVALID' "$project_dir/scripts/socks-doctor"
+if grep -Fq 'source "$ENV_FILE"' "$project_dir/scripts/socks-doctor"; then
+  printf '诊断程序不应把待检查的凭据文件作为 Shell 代码载入。\n' >&2
+  exit 1
+fi
+grep -q '脱敏报告已生成' "$project_dir/scripts/socksctl"
+if rg -n 'RESTART_RECOVERED|RESTART_RECOVERY_FAILED' "$project_dir/scripts/socksctl"; then
+  printf '重启失败仍在自动恢复，不符合克制维修规则。\n' >&2
+  exit 1
+fi
 grep -q '20.04|22.04|24.04' "$project_dir/preflight.sh"
 grep -q '/root/gost-socks-backups' "$project_dir/overwrite.sh"
 grep -q 'systemctl disable --now sing-box' "$project_dir/overwrite.sh"
@@ -81,6 +94,16 @@ SOCKS_SAFETY_ROOT="$incident_test_dir" "$project_dir/scripts/socks-safety" incid
 SOCKS_SAFETY_ROOT="$incident_test_dir" "$project_dir/scripts/socks-safety" incidents "$second_note" \
   | grep -Fq 'yes'
 rm -rf -- "$incident_test_dir"
+
+redaction_password='secret.with.dots'
+redaction_username='user.with.dots'
+redaction_input="user=$redaction_username password=$redaction_password"
+escaped_password=${redaction_password//./\\.}
+escaped_username=${redaction_username//./\\.}
+redaction_output=$(printf '%s\n' "$redaction_input" \
+  | sed -e "s/$escaped_password/[REDACTED_PASSWORD]/g" \
+        -e "s/$escaped_username/[REDACTED_USER]/g")
+[[ $redaction_output == 'user=[REDACTED_USER] password=[REDACTED_PASSWORD]' ]]
 
 safety_test_dir=$(mktemp -d)
 mkdir -p "$safety_test_dir/fakebin" "$safety_test_dir/etc/gost-socks" \

@@ -46,13 +46,27 @@ printf '=== SOCKS5 健康诊断（脱敏）===\n'
 local_errors=0
 warnings=0
 
+read_env_value() {
+  local key=$1
+  awk -F= -v wanted="$key" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE" 2>/dev/null || true
+}
+
 if [[ ! -f $ENV_FILE || ! -f $CONFIG_FILE ]]; then
   printf '故障 [CONFIG_MISSING]：节点配置不完整。\n'
   record CONFIG_MISSING config-or-env-missing
   local_errors=$((local_errors + 1))
 else
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
+  NODE_NAME=$(read_env_value NODE_NAME)
+  PUBLIC_IP=$(read_env_value PUBLIC_IP)
+  SOCKS_PORT=$(read_env_value SOCKS_PORT)
+  SOCKS_USERNAME=$(read_env_value SOCKS_USERNAME)
+  SOCKS_PASSWORD=$(read_env_value SOCKS_PASSWORD)
+  [[ $NODE_NAME =~ ^[A-Za-z0-9._-]{2,32}$ ]] || NODE_NAME=未知
+  public_ip_invalid=false
+  if [[ -n $PUBLIC_IP && ! $PUBLIC_IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    public_ip_invalid=true
+    PUBLIC_IP=""
+  fi
   printf '节点：%s:%s\n' "${PUBLIC_IP:-${NODE_NAME:-未知}}" "${SOCKS_PORT:-未知}"
   printf '协议能力：SOCKS5 TCP；未启用 UDP 转发。\n'
   env_mode=$(stat -c '%a' "$ENV_FILE")
@@ -65,13 +79,24 @@ else
     record CONFIG_PERMISSION "env-$env_mode-config-$config_mode-owner-$config_owner"
     local_errors=$((local_errors + 1))
   fi
-  config_content=$(<"$CONFIG_FILE")
-  if [[ $config_content != *"addr: \":$SOCKS_PORT\""* \
-     || $config_content != *"username: \"$SOCKS_USERNAME\""* \
-     || $config_content != *"password: \"$SOCKS_PASSWORD\""* ]]; then
-    printf '故障 [CONFIG_MISMATCH]：运行配置与 root 凭据记录不一致。\n'
-    record CONFIG_MISMATCH config-and-env-disagree
+  if [[ $NODE_NAME == 未知 \
+     || $public_ip_invalid == true \
+     || ! $SOCKS_PORT =~ ^[0-9]+$ \
+     || $SOCKS_PORT -lt 1024 || $SOCKS_PORT -gt 65535 \
+     || ! $SOCKS_USERNAME =~ ^[A-Za-z0-9._-]{4,32}$ \
+     || ! $SOCKS_PASSWORD =~ ^[A-Za-z0-9._-]{16,64}$ ]]; then
+    printf '故障 [CONFIG_INVALID]：凭据记录格式异常，无法安全判断，禁止自动维修。\n'
+    record CONFIG_INVALID env-format-invalid
     local_errors=$((local_errors + 1))
+  else
+    config_content=$(<"$CONFIG_FILE")
+    if [[ $config_content != *"addr: \":$SOCKS_PORT\""* \
+       || $config_content != *"username: \"$SOCKS_USERNAME\""* \
+       || $config_content != *"password: \"$SOCKS_PASSWORD\""* ]]; then
+      printf '故障 [CONFIG_MISMATCH]：运行配置与 root 凭据记录不一致。\n'
+      record CONFIG_MISMATCH config-and-env-disagree
+      local_errors=$((local_errors + 1))
+    fi
   fi
 fi
 
@@ -93,9 +118,13 @@ fi
 
 if [[ -n ${SOCKS_PORT:-} ]] && command -v ss >/dev/null 2>&1; then
   listener=$(ss -H -lntp 2>/dev/null | awk -v port=":$SOCKS_PORT" '$4 ~ port "$" {print}')
-  if [[ $listener != *'"gost"'* ]]; then
-    printf '故障 [PORT_OWNER]：端口 %s 未由 GOST 监听。\n' "$SOCKS_PORT"
-    record PORT_OWNER "target-port-not-owned-by-gost"
+  if [[ -z $listener ]]; then
+    printf '故障 [PORT_NOT_LISTENING]：端口 %s 没有程序监听。\n' "$SOCKS_PORT"
+    record PORT_NOT_LISTENING target-port-not-listening
+    local_errors=$((local_errors + 1))
+  elif [[ $listener != *'"gost"'* ]]; then
+    printf '故障 [PORT_CONFLICT]：端口 %s 被其他程序占用，无法确认是否可以处理。\n' "$SOCKS_PORT"
+    record PORT_CONFLICT target-port-owned-by-another-process
     local_errors=$((local_errors + 1))
   fi
 fi
@@ -134,7 +163,8 @@ if journalctl -k -n 300 --no-pager 2>/dev/null | grep -qiE 'out of memory|oom-ki
 fi
 
 if (( local_errors > 0 )); then
-  printf '\n结论：本地确定性故障 %s 项，警告 %s 项。可以运行 socksctl heal 尝试恢复最后可用状态。\n' "$local_errors" "$warnings"
+  printf '\n结论：本地故障 %s 项，警告 %s 项。\n' "$local_errors" "$warnings"
+  printf '运行 socksctl heal 时，只有严格白名单内且原因明确的配置故障才会自动恢复；其他情况会停止并给出中文说明。\n'
   exit 1
 fi
 

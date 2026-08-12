@@ -2,12 +2,13 @@
 
 这是一个面向 macOS + Linux VPS 的简化 SOCKS5 部署工具。目标是让每台 VPS 只提供一个直接 SOCKS5 节点，避免 3x-ui、VLESS、v2rayN 副本和多层本地端口造成混淆。
 
-当前推荐稳定版本：`v1.6.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
+当前推荐稳定版本：`v1.6.1`。新节点只使用稳定标签，不直接使用开发中的 `main`。
 
 > 网络检测公告：[当前设备与比特窗口网络检测网站](docs/announcements/network-check-links.md)
 
 - [完整搭建教程](docs/tutorial.md)
 - [Windows + Xshell 教程](docs/windows-xshell.md)
+- [手动检查、维修与 Codex 求助教程](docs/troubleshooting.md)
 - [各版本详细说明](docs/releases/)
 - [版本维护规则](docs/version-policy.md)
 - [发布新版本清单](RELEASING.md)
@@ -185,6 +186,7 @@ sudo socksctl heal         # 本地确定性故障时恢复最后可用状态
 sudo socksctl recover      # 经确认后手工恢复最后可用状态
 sudo socksctl snapshots    # 查看 last-good 和 previous-good
 sudo socksctl note         # 交互式记录暂时说不清的问题
+sudo socksctl report       # 生成可交给 Codex 的脱敏故障报告
 ```
 
 ## 最后可用状态与故障档案
@@ -202,11 +204,16 @@ socksctl recover previous       # 退回前一健康版本
 socksctl note                   # 输入现象并获得事件编号
 ```
 
-只有服务、配置、权限和端口等本地确定性故障允许 `socksctl heal` 回退。VPN 出口变化、云安全
-组、VPS 线路和检测网站等外部故障只记录，不盲目覆写协议。恢复是“尽力恢复”，服务器被删除、
+只有白名单内且证据明确的配置故障允许 `socksctl heal` 回退。VPN 出口变化、云安全组、端口
+冲突、VPS 线路和检测网站等问题只记录，不盲目覆写协议。恢复是“尽力恢复”，服务器被删除、
 磁盘损坏或 SSH 完全失联时，服务器内快照无法提供保证。
 恢复只回退协议二进制、配置、凭据和服务定义；诊断与事件查询工具保持最新版，确保回退后
 仍能查看刚刚发生的问题。
+
+`socksctl heal` 使用严格维修白名单：只有配置缺失、配置权限错误或配置与凭据记录不一致，且
+没有端口冲突、未知错误等阻断信号时，才允许恢复健康快照。服务单独停止、端口被其他程序
+占用、系统资源异常和任何未知故障都会停止自动维修，保持配置不变并显示中文说明。
+需要人工处理时请阅读[手动检查、维修与 Codex 求助教程](docs/troubleshooting.md)。
 
 更新到本项目当前固定的 GOST 版本：重新运行同一个 `deploy.sh` 命令。已有节点名称、端口和凭据会被保留。新节点名称默认与 VPS 公网 IP 相同，无需额外命名。
 
