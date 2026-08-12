@@ -4,6 +4,8 @@
 
 当前推荐稳定版本：`v1.2.1`。新节点只使用稳定标签，不直接使用开发中的 `main`。
 
+> 网络检测公告：[当前设备与比特窗口网络检测网站](docs/announcements/network-check-links.md)
+
 - [完整搭建教程](docs/tutorial.md)
 - [Windows + Xshell 教程](docs/windows-xshell.md)
 - [各版本详细说明](docs/releases/)
@@ -195,6 +197,7 @@ uninstall.sh             VPS 卸载脚本
 scripts/socksctl         VPS 管理命令
 docs/windows-xshell.md   Windows + Xshell 图文式步骤
 docs/tutorial.md         完整搭建、验收与维护教程
+docs/announcements/      网络检测网站公告与使用说明
 docs/releases/           每个稳定版本的独立说明
 docs/version-policy.md   固定版本维护规则
 CHANGELOG.md             稳定版本更新记录
