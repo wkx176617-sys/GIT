@@ -2,7 +2,7 @@
 
 ## 推荐版本
 
-- 部署工具：`v1.7.2`（稳定版）
+- 部署工具：`v1.7.3`（稳定版）
 - 代理核心：GOST `3.2.6`（脚本固定版本并验证 SHA-256）
 - 推荐系统：Ubuntu 24.04 LTS `amd64`；已有 Ubuntu 22.04 节点可以继续使用
 - Windows 终端：Xshell 8
@@ -57,14 +57,16 @@ ss -lntp
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.7.2 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.7.3 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
 ## 四、从 macOS 安装
 
+第一次使用 Mac 请按 [macOS 部署指南](macos.md)操作，下面仅保留完整流程中的命令摘要：
+
 ```bash
-git clone --branch v1.7.2 --depth 1 git@github.com:wkx176617-sys/GIT.git
+git clone --branch v1.7.3 --depth 1 https://github.com/wkx176617-sys/GIT.git
 cd GIT
 ./deploy.sh root@VPS公网IP --port 31080
 ```
@@ -164,6 +166,9 @@ socksctl credentials
 ```
 
 ### 导入 v2rayN（Windows）
+
+链接、二维码、手工填写和网络验收的统一说明见
+[客户端导入与网络验收](clients.md)。下面保留完整流程的命令摘要。
 
 建议使用 v2rayN 官方当前稳定版。登录服务器运行：
 

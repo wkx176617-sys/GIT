@@ -14,8 +14,10 @@ tag="v$version"
 release_file="docs/releases/$tag.md"
 
 [[ -f $release_file ]] || { printf '缺少版本说明：%s\n' "$release_file" >&2; exit 1; }
-[[ -f AGENTS.md && -f docs/project-principles.md && -f docs/architecture.md && -f docs/modules.md ]] \
-  || { printf '缺少仓库规则、项目宗旨、轻量架构或模块索引\n' >&2; exit 1; }
+[[ -f AGENTS.md && -f docs/project-principles.md && -f docs/architecture.md \
+   && -f docs/modules.md && -f docs/macos.md && -f docs/windows-xshell.md \
+   && -f docs/clients.md ]] \
+  || { printf '缺少仓库规则、架构、模块索引、平台教程或客户端教程\n' >&2; exit 1; }
 [[ -f .github/ISSUE_TEMPLATE/bug_report.yml \
    && -f .github/ISSUE_TEMPLATE/feature_request.yml \
    && -f .github/PULL_REQUEST_TEMPLATE.md ]] \
@@ -25,6 +27,12 @@ grep -Fq "当前推荐稳定版本：\`$tag\`" README.md || { printf 'README 未
 grep -Fq "工具：\`$tag\`" docs/tutorial.md || { printf '完整教程未推荐 %s\n' "$tag" >&2; exit 1; }
 grep -Fq -- "--branch $tag" docs/tutorial.md || { printf '完整教程下载命令未固定 %s\n' "$tag" >&2; exit 1; }
 grep -Fq -- "--branch $tag" docs/windows-xshell.md || { printf 'Xshell 教程下载命令未固定 %s\n' "$tag" >&2; exit 1; }
+grep -Fq -- "--branch $tag" docs/macos.md || { printf 'macOS 教程下载命令未固定 %s\n' "$tag" >&2; exit 1; }
+grep -Fq '[macOS 部署指南](docs/macos.md)' README.md || { printf 'README 未提供macOS专用入口\n' >&2; exit 1; }
+grep -Fq '[客户端导入与网络验收](docs/clients.md)' README.md \
+  || { printf 'README 未提供客户端专用入口\n' >&2; exit 1; }
+grep -Fq 'socksctl export' docs/clients.md && grep -Fq 'socksctl qr shadowrocket' docs/clients.md \
+  || { printf '客户端教程缺少链接或二维码说明\n' >&2; exit 1; }
 grep -Fq '## 复杂度与性能影响' "$release_file" \
   || { printf '版本说明缺少“复杂度与性能影响”\n' >&2; exit 1; }
 grep -Fq 'GOST 是唯一必要的常驻业务进程' docs/project-principles.md \
@@ -75,6 +83,22 @@ while IFS= read -r existing_tag; do
 done < <(git tag --list 'v*' --sort=version:refname)
 
 bash tests/syntax.sh
+
+link_failed=false
+while IFS= read -r markdown_file; do
+  while IFS= read -r link_target; do
+    case "$link_target" in
+      http://*|https://*|mailto:*|'#'*|"") continue ;;
+    esac
+    local_target=${link_target%%#*}
+    local_target=${local_target%%\?*}
+    if [[ ! -e "$(dirname "$markdown_file")/$local_target" ]]; then
+      printf '文档本地链接失效：%s -> %s\n' "$markdown_file" "$link_target" >&2
+      link_failed=true
+    fi
+  done < <(grep -oE '\]\([^)]+\)' "$markdown_file" | sed -E 's/^\]\(([^)]+)\)$/\1/')
+done < <(git ls-files --cached --others --exclude-standard '*.md' | sort -u)
+[[ $link_failed == false ]] || exit 1
 
 format_failed=false
 while IFS= read -r text_file; do

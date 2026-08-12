@@ -33,8 +33,10 @@
 |---|---|
 | `AGENTS.md` | 整个仓库必须遵守的开发规则和决策顺序 |
 | `README.md` | GitHub首页，只保留定位、快速入口、模块地图和导航 |
-| `docs/tutorial.md` | 完整搭建、客户端配置和人工验收 |
+| `docs/tutorial.md` | 跨平台完整搭建流程和专题文档入口 |
+| `docs/macos.md` | Mac Terminal、SSH、部署、迁移和升级步骤 |
 | `docs/windows-xshell.md` | Windows新手逐步操作和粘贴防错 |
+| `docs/clients.md` | v2rayN、小火箭、比特浏览器导入和人工验收 |
 | `docs/troubleshooting.md` | 故障检查、恢复边界和Codex提问模板 |
 | `docs/project-principles.md` | 宗旨、性能预算和功能准入规则 |
 | `docs/architecture.md` | 模块职责和依赖方向 |
@@ -44,6 +46,8 @@
 
 - 安装失败或镜像兼容：先看 `preflight.sh`、`install.sh`。
 - Xshell复制粘贴错误：先看 `xshell-install.sh` 和 Xshell 教程。
+- Mac连接或本地部署错误：先看 `deploy.sh` 和 macOS教程。
+- 客户端导入、二维码或浏览器验收：只改客户端专题，不复制到平台教程。
 - 服务、端口、资源或线路检测：改 `socks-doctor`，不要写入安装器。
 - 快照、事件、校验、熔断：改 `socks-safety`，不要让 `socksctl` 自己保存状态。
 - 用户命令和菜单：改 `socksctl`，复杂实现应下沉到对应模块。

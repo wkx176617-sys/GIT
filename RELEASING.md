@@ -4,7 +4,7 @@
 [轻量模块架构](docs/architecture.md)和[版本维护规则](docs/version-policy.md)。
 
 1. 确定新版本号，并更新 `VERSION`。
-2. 同步更新 README、完整教程和 Windows/Xshell 教程中的推荐标签。
+2. 同步更新 README、完整教程、macOS 和 Windows/Xshell 教程中的推荐标签。
 3. 更新 `CHANGELOG.md`。
 4. 创建 `docs/releases/vX.Y.Z.md`。
 5. 如果 `addons/` 中插件发生变化，更新插件版本、兼容声明、独立教程和主版本说明。

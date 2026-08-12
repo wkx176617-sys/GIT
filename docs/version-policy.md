@@ -27,7 +27,7 @@
 1. 更新根目录 `VERSION`。
 2. 更新 `README.md` 中的推荐版本。
 3. 更新完整搭建教程中的下载命令和推荐版本。
-4. 更新 Windows/Xshell 教程中的固定标签。
+4. 更新 macOS 和 Windows/Xshell 教程中的固定标签。
 5. 在 `CHANGELOG.md` 添加版本摘要。
 6. 新建 `docs/releases/vX.Y.Z.md` 详细说明。
 7. 写明新增内容、修复内容、兼容性、升级步骤、回退步骤和已知限制。

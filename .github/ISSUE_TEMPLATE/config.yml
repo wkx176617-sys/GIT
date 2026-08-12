@@ -3,6 +3,15 @@ contact_links:
   - name: 新手完整搭建教程
     url: https://github.com/wkx176617-sys/GIT/blob/main/docs/tutorial.md
     about: 第一次安装和常规配置请先查看这里
+  - name: macOS专用部署教程
+    url: https://github.com/wkx176617-sys/GIT/blob/main/docs/macos.md
+    about: 使用Mac Terminal部署和管理节点请查看这里
+  - name: Windows与Xshell教程
+    url: https://github.com/wkx176617-sys/GIT/blob/main/docs/windows-xshell.md
+    about: 使用Windows和Xshell连接服务器请查看这里
+  - name: 客户端导入与网络验收
+    url: https://github.com/wkx176617-sys/GIT/blob/main/docs/clients.md
+    about: 查询复制链接、二维码、比特浏览器和检测步骤
   - name: 手动检查与Codex求助教程
     url: https://github.com/wkx176617-sys/GIT/blob/main/docs/troubleshooting.md
     about: 原因不明时先只读检查并生成脱敏报告
