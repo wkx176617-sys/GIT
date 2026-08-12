@@ -4,10 +4,10 @@ set -Eeuo pipefail
 usage() {
   cat <<'EOF'
 用法：
-  sudo bash xshell-install.sh [--port 31080]
+  sudo bash xshell-install.sh [--port 31080] [--overwrite]
 
-此入口适用于 Windows Xshell 登录后的 Ubuntu/Debian 服务器。
-它会补齐基础依赖，再调用同目录的 install.sh。节点名称自动使用 VPS 公网 IP。
+此入口适用于 Windows Xshell 登录后的 Ubuntu 服务器。
+默认先质检再安装；使用 --overwrite 时只覆写可安全识别的旧 sing-box SOCKS5。
 EOF
 }
 
@@ -21,14 +21,41 @@ die() {
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 [[ -f $script_dir/install.sh ]] || die "同目录中缺少 install.sh，请完整下载或上传本项目"
+[[ -f $script_dir/preflight.sh ]] || die "同目录中缺少 preflight.sh，请完整下载或上传本项目"
+[[ -f $script_dir/overwrite.sh ]] || die "同目录中缺少 overwrite.sh，请完整下载或上传本项目"
+
+overwrite=false
+install_args=()
+for arg in "$@"; do
+  if [[ $arg == --overwrite ]]; then
+    overwrite=true
+  else
+    install_args+=("$arg")
+  fi
+done
 
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
-  printf '正在检查 Ubuntu/Debian 基础依赖...\n'
+  printf '正在检查 Ubuntu 基础依赖...\n'
   apt-get update
-  apt-get install -y ca-certificates coreutils curl findutils iproute2 passwd qrencode tar
+  apt-get install -y ca-certificates coreutils curl findutils iproute2 jq passwd qrencode tar
 else
-  die "当前只支持使用 apt-get 的 Ubuntu/Debian 服务器"
+  die "当前只支持使用 apt-get 的 Ubuntu 服务器"
 fi
 
-exec bash "$script_dir/install.sh" "$@"
+port=31080
+for ((index=0; index<${#install_args[@]}; index++)); do
+  [[ ${install_args[index]} == --port && $((index + 1)) -lt ${#install_args[@]} ]] \
+    && port=${install_args[index + 1]}
+done
+
+if [[ $overwrite == true ]]; then
+  exec bash "$script_dir/overwrite.sh" "${install_args[@]}"
+fi
+
+if ! bash "$script_dir/preflight.sh" --port "$port"; then
+  printf '\n质检未通过。若报告明确显示“可迁移：旧 sing-box”，请确认备份说明后运行：\n'
+  printf 'bash xshell-install.sh --port %s --overwrite\n' "$port"
+  exit 2
+fi
+exec bash "$script_dir/install.sh" "${install_args[@]}"

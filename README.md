@@ -2,7 +2,7 @@
 
 这是一个面向 macOS + Linux VPS 的简化 SOCKS5 部署工具。目标是让每台 VPS 只提供一个直接 SOCKS5 节点，避免 3x-ui、VLESS、v2rayN 副本和多层本地端口造成混淆。
 
-当前推荐稳定版本：`v1.3.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
+当前推荐稳定版本：`v1.4.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
 
 > 网络检测公告：[当前设备与比特窗口网络检测网站](docs/announcements/network-check-links.md)
 
@@ -26,7 +26,7 @@
 
 ## 支持范围
 
-- 服务端：Ubuntu 20.04/22.04/24.04、Debian 11/12/13（使用 systemd）
+- 服务端：Ubuntu 20.04/22.04/24.04（使用 systemd；支持标准镜像和常见精简镜像）
 - 架构：Linux `amd64`、`arm64`
 - GOST：固定使用官方稳定版 `3.2.6`，下载后校验 SHA-256
 - 协议：标准 SOCKS5、用户名/密码、TCP
@@ -48,6 +48,32 @@
 Windows 用户可以使用 Xshell 8 登录 VPS，然后运行项目中的 `xshell-install.sh`。Windows 本机不需要 Bash、Go、GOST 或 Docker。
 
 完整步骤见：[Windows + Xshell 部署指南](docs/windows-xshell.md)。
+
+## 旧节点质检与覆写
+
+旧 IP 本身不会与新代码冲突；风险来自相同端口被旧 sing-box、x-ui、Xray 或其他程序占用。
+安装入口会先运行只读质检：
+
+```bash
+sudo bash preflight.sh --port 31080
+```
+
+- 空闲端口：允许全新安装。
+- 本工具的 GOST：允许安全升级并保留原凭据。
+- 可识别的 sing-box SOCKS5：报告“可迁移”，不会自动改动。
+- x-ui、Xray、v2ray 或未知进程：阻止自动安装，不会停用。
+
+只有质检明确显示旧 sing-box 可迁移时，才执行：
+
+```bash
+sudo bash overwrite.sh --port 31080
+```
+
+从 Mac 远程部署时使用 `./deploy.sh root@VPS公网IP --port 31080 --overwrite`。
+
+覆写程序会先备份到 `/root/gost-socks-backups/`，迁移原 SOCKS5 账号密码，再切换服务并
+执行代理出口验收；安装或验收失败会停止新 GOST 并尝试恢复旧 sing-box。不要对未知端口
+占用强行覆写。
 
 各版本变化见：[更新记录](CHANGELOG.md)。
 
@@ -187,6 +213,8 @@ xshell-install.sh        Windows Xshell 登录后的部署入口
 install.sh               VPS 安装/升级脚本
 uninstall.sh             VPS 卸载脚本
 scripts/socksctl         VPS 管理命令
+preflight.sh             Ubuntu 镜像、旧服务和端口只读质检
+overwrite.sh             备份并迁移受支持的旧 sing-box SOCKS5
 docs/windows-xshell.md   Windows + Xshell 图文式步骤
 docs/tutorial.md         完整搭建、验收与维护教程
 docs/announcements/      网络检测网站公告与使用说明

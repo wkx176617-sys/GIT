@@ -1,0 +1,21 @@
+{
+  "inbounds": [
+    {
+      "type": "socks",
+      "tag": "socks-in",
+      "listen": "0.0.0.0",
+      "listen_port": 31080,
+      "users": [
+        {
+          "username": "node_example",
+          "password": "0123456789abcdef0123456789abcdef"
+        }
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct"
+    }
+  ]
+}

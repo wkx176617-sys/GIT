@@ -1,6 +1,6 @@
 # Windows + Xshell 部署指南
 
-本指南适用于在 Windows 10/11 上使用 Xshell 8，通过 SSH 管理 Ubuntu/Debian VPS。Xshell 只是远程终端；安装脚本实际运行在 Linux VPS 上，因此 Windows 不需要安装 Bash、Go、GOST 或 Docker。
+本指南适用于在 Windows 10/11 上使用 Xshell 8，通过 SSH 管理 Ubuntu VPS。Xshell 只是远程终端；安装脚本实际运行在 Linux VPS 上，因此 Windows 不需要安装 Bash、Go、GOST 或 Docker。
 
 ## 准备信息
 
@@ -38,7 +38,7 @@ root@server:~#
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.3.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.4.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 cd /root/socks5-toolkit
 ```
 
@@ -56,7 +56,7 @@ bash xshell-install.sh --port 31080
 
 如果服务器无法访问 GitHub：
 
-1. 在 Windows 下载本项目 `v1.3.0` 源码压缩包并解压。
+1. 在 Windows 下载本项目 `v1.4.0` 源码压缩包并解压。
 2. 在已连接的 Xshell 中选择“窗口 → 新建文件传输”，或者打开远程文件管理器。
 3. 将整个项目文件夹上传到 `/root/socks5-toolkit`。
 4. 回到 Xshell 执行：
@@ -65,6 +65,16 @@ bash xshell-install.sh --port 31080
 cd /root/socks5-toolkit
 bash xshell-install.sh --port 31080
 ```
+
+安装入口会先进行只读质检。如果旧 sing-box 已经占用 `31080` 且报告“可迁移”，确认旧配置
+备份说明后运行：
+
+```bash
+bash xshell-install.sh --port 31080 --overwrite
+```
+
+它会保留旧 SOCKS5 账号密码。若报告 x-ui、Xray、v2ray 或未知程序占用端口，不要强行
+覆写，先确认旧服务用途。
 
 Xshell 8 官方支持远程文件管理器，并可与 Xftp 通过 SFTP 上传文件。
 

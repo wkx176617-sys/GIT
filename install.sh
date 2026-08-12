@@ -32,8 +32,8 @@ die() {
 
 node_name=""
 port=""
-username=""
-password=""
+username=${MIGRATE_SOCKS_USERNAME:-}
+password=${MIGRATE_SOCKS_PASSWORD:-}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -43,6 +43,27 @@ while [[ $# -gt 0 ]]; do
     *) die "未知参数：$1" ;;
   esac
 done
+
+[[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
+# shellcheck disable=SC1091
+source /etc/os-release
+[[ ${ID:-} == ubuntu ]] || die "v1.4.0 当前只支持 Ubuntu 镜像"
+case "${VERSION_ID:-}" in
+  20.04|22.04|24.04) ;;
+  *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
+esac
+
+missing_base=false
+for base_command in curl find sha256sum ss tar useradd; do
+  command -v "$base_command" >/dev/null 2>&1 || missing_base=true
+done
+if [[ $missing_base == true ]]; then
+  command -v apt-get >/dev/null 2>&1 || die "精简镜像缺少基础命令，且无法使用 apt-get 补齐"
+  export DEBIAN_FRONTEND=noninteractive
+  printf '正在为 Ubuntu 精简镜像补齐基础依赖...\n'
+  apt-get update
+  apt-get install -y ca-certificates coreutils curl findutils iproute2 passwd tar
+fi
 
 if [[ -f $ENV_FILE ]]; then
   # 文件仅允许安全字符，并由本脚本以 root 权限创建。

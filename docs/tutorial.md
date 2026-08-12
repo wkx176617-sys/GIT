@@ -2,7 +2,7 @@
 
 ## 推荐版本
 
-- 部署工具：`v1.3.0`（稳定版）
+- 部署工具：`v1.4.0`（稳定版）
 - 代理核心：GOST `3.2.6`（脚本固定版本并验证 SHA-256）
 - 推荐系统：Ubuntu 24.04 LTS `amd64`；已有 Ubuntu 22.04 节点可以继续使用
 - Windows 终端：Xshell 8
@@ -57,7 +57,7 @@ ss -lntp
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.3.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.4.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 cd /root/socks5-toolkit
 bash xshell-install.sh --port 31080
 ```
@@ -65,14 +65,42 @@ bash xshell-install.sh --port 31080
 ## 四、从 macOS 安装
 
 ```bash
-git clone --branch v1.3.0 --depth 1 git@github.com:wkx176617-sys/GIT.git
+git clone --branch v1.4.0 --depth 1 git@github.com:wkx176617-sys/GIT.git
 cd GIT
 ./deploy.sh root@VPS公网IP --port 31080
 ```
 
 脚本会上传安装文件、下载并校验固定 GOST 版本、生成独立账号密码、创建低权限服务账户并启用开机启动。
 
-## 五、以后查询节点
+## 五、旧节点质检和覆写
+
+在运行过老代码的服务器上，先执行：
+
+```bash
+bash preflight.sh --port 31080
+```
+
+该命令只读取信息，不会停止服务。IP 不会因代码更新而冲突，质检关注的是 Ubuntu 镜像是否
+兼容、端口 `31080` 是否被占用，以及占用者是谁。
+
+如果结论是“通过”，运行标准安装。如果明确显示“可迁移：旧 sing-box”，可以执行：
+
+```bash
+bash overwrite.sh --port 31080
+```
+
+从 Mac 本地项目部署时，对应命令是：
+
+```bash
+./deploy.sh root@VPS公网IP --port 31080 --overwrite
+```
+
+确认后程序会把旧配置备份到 `/root/gost-socks-backups/时间戳/`，读取旧 SOCKS5 用户名和
+密码、停用旧 sing-box、安装 GOST，并保持原端口和凭据。安装后还会验证代理出口；安装或
+验收失败时会停止新 GOST 并尝试重新启用旧服务。
+如果检测到 x-ui、Xray、v2ray 或未知程序，程序会停止，不会擅自覆写。
+
+## 六、以后查询节点
 
 节点信息保存在对应 VPS 的 `/etc/gost-socks/node.env`，只有 root 可以读取。以后无论使用
 Mac 还是 Windows，只要通过 SSH/Xshell 登录该 VPS，就可以查询：
@@ -86,7 +114,7 @@ socksctl export       # 手工信息和两个客户端导入链接
 不需要在 Mac 或 Windows 维护 Git 节点清单，也不要把导出结果上传 GitHub。你仍需保存 VPS
 公网 IP 和 SSH 登录凭据，否则无法进入服务器查询。
 
-## 六、配置比特浏览器
+## 七、配置比特浏览器
 
 ```text
 代理类型：SOCKS5
@@ -98,7 +126,7 @@ socksctl export       # 手工信息和两个客户端导入链接
 
 时区和地理位置使用“根据 IP 自动匹配”，开启 WebRTC 保护。
 
-## 七、验收
+## 八、验收
 
 先在 VPS 检查：
 
@@ -117,7 +145,7 @@ socksctl check
 
 检测通过只代表网络配置一致，不保证任何第三方平台一定接受该 IP；云服务器 IP 也不会因为 SOCKS5 自动变成住宅 IP。
 
-## 八、日常维护
+## 九、日常维护
 
 ```bash
 socksctl status
@@ -175,7 +203,7 @@ socksctl rotate
 
 更换后立即同步更新比特浏览器。
 
-## 九、升级与回退
+## 十、升级与回退
 
 升级前阅读 [更新记录](../CHANGELOG.md) 和对应的 [版本说明](releases/)。确认兼容后切换到指定标签并重新运行安装入口。安装器会保留已有节点名称、端口和凭据。
 

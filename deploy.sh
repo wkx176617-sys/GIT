@@ -4,13 +4,14 @@ set -Eeuo pipefail
 usage() {
   cat <<'EOF'
 用法：
-  ./deploy.sh <SSH目标> [--port <端口>]
+  ./deploy.sh <SSH目标> [--port <端口>] [--overwrite]
 
 示例：
   ./deploy.sh root@203.0.113.10
   ./deploy.sh ubuntu@203.0.113.10 --port 31080
 
 节点名称默认自动使用 VPS 公网 IP。特殊情况下仍可通过 --name 自定义。
+默认只做安全安装；--overwrite 仅迁移可识别的旧 sing-box SOCKS5。
 EOF
 }
 
@@ -26,6 +27,7 @@ target=$1
 shift
 node_name=""
 port=31080
+overwrite=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,6 +40,10 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || die "--port 缺少值"
       port=$2
       shift 2
+      ;;
+    --overwrite)
+      overwrite=true
+      shift
       ;;
     --help|-h)
       usage
@@ -60,7 +66,7 @@ for command_name in ssh scp; do
 done
 
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-for required_file in install.sh uninstall.sh scripts/socksctl; do
+for required_file in install.sh uninstall.sh preflight.sh overwrite.sh scripts/socksctl; do
   [[ -f "$project_dir/$required_file" ]] || die "缺少项目文件：$required_file"
 done
 
@@ -73,14 +79,19 @@ trap cleanup EXIT
 
 printf '正在连接 %s...\n' "$target"
 ssh "$target" "mkdir -p '$remote_dir'"
-scp "$project_dir/install.sh" "$project_dir/uninstall.sh" "$project_dir/scripts/socksctl" "$target:$remote_dir/"
+scp "$project_dir/install.sh" "$project_dir/uninstall.sh" "$project_dir/preflight.sh" \
+  "$project_dir/overwrite.sh" "$project_dir/scripts/socksctl" "$target:$remote_dir/"
 
 install_args="--port '$port'"
 if [[ -n $node_name ]]; then
   install_args+=" --name '$node_name'"
 fi
 printf '正在安装节点（名称自动使用公网 IP，端口 %s）...\n' "$port"
-remote_command="if [ \"\$(id -u)\" -eq 0 ]; then bash '$remote_dir/install.sh' $install_args; else sudo bash '$remote_dir/install.sh' $install_args; fi"
+if [[ $overwrite == true ]]; then
+  remote_command="if [ \"\$(id -u)\" -eq 0 ]; then bash '$remote_dir/overwrite.sh' $install_args; else sudo bash '$remote_dir/overwrite.sh' $install_args; fi"
+else
+  remote_command="if [ \"\$(id -u)\" -eq 0 ]; then bash '$remote_dir/preflight.sh' --port '$port' && bash '$remote_dir/install.sh' $install_args; else sudo bash '$remote_dir/preflight.sh' --port '$port' && sudo bash '$remote_dir/install.sh' $install_args; fi"
+fi
 ssh -t "$target" "$remote_command"
 
 printf '\n部署完成。请立即把终端输出的节点凭据保存到密码管理器。\n'
