@@ -2,7 +2,7 @@
 
 这是一个面向 macOS + Linux VPS 的简化 SOCKS5 部署工具。目标是让每台 VPS 只提供一个直接 SOCKS5 节点，避免 3x-ui、VLESS、v2rayN 副本和多层本地端口造成混淆。
 
-当前推荐稳定版本：`v1.2.1`。新节点只使用稳定标签，不直接使用开发中的 `main`。
+当前推荐稳定版本：`v1.3.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
 
 > 网络检测公告：[当前设备与比特窗口网络检测网站](docs/announcements/network-check-links.md)
 
@@ -128,6 +128,9 @@ sudo socksctl status       # 服务状态
 sudo socksctl check        # 检查端口并通过代理访问测试站点
 sudo socksctl info         # 节点信息（密码打码）
 sudo socksctl credentials  # 显示完整账号密码
+sudo socksctl export       # 导出手工信息、v2rayN 和 Shadowrocket 链接
+sudo socksctl qr            # 生成 Shadowrocket 扫码二维码
+sudo socksctl qr v2rayn     # 生成 v2rayN 扫码二维码
 sudo socksctl logs         # 最近 100 行日志
 sudo socksctl restart      # 重启服务
 sudo socksctl rotate       # 自动生成新密码并重启
@@ -148,21 +151,10 @@ sudo socks-uninstall
 
 ## 多节点管理规则
 
-推荐命名：
-
-```text
-MX-01  墨西哥节点 1
-US-01  美国节点 1
-US-02  美国节点 2
-```
-
-所有节点都使用 `31080`。建议在密码管理器中保存：
-
-```text
-VPS IP（同时作为节点名称）/ 国家 / 端口 / SOCKS5 用户名 / SOCKS5 密码 / 绑定的浏览器环境
-```
-
-不要将真实节点表提交到 Git。
+所有节点都使用 `31080`，节点名称默认就是 VPS 公网 IP。真实节点信息保存在各自服务器的
+`/etc/gost-socks/node.env`，不建立本地节点清单，也不上传 GitHub。在任意 Mac 或 Windows
+设备上通过 SSH/Xshell 登录对应服务器后，运行 `sudo socksctl info` 或
+`sudo socksctl export` 即可查询。你仍需记住 VPS 的 IP 和 SSH 登录凭据。
 
 ## DNS 与隔离验收
 

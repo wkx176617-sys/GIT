@@ -137,6 +137,7 @@ install -d -m 0750 -o root -g gost-socks "$CONFIG_DIR"
 
 cat >"$ENV_FILE" <<EOF
 NODE_NAME=$node_name
+PUBLIC_IP=$public_ip
 SOCKS_PORT=$port
 SOCKS_USERNAME=$username
 SOCKS_PASSWORD=$password
@@ -222,5 +223,6 @@ GOST SOCKS5 节点安装成功
 1. 在萤光云安全组放行 TCP $port，并限制为固定工作出口 IP/32。
 2. 在比特浏览器中填写 VPS 公网 IP、端口、用户名和密码。
 3. 运行 sudo socksctl check 进行基础连通性测试。
-4. 立即将凭据保存到密码管理器，不要提交到 Git。
+4. 以后在任意 Mac/Windows 上登录本服务器，运行 sudo socksctl info 查询节点。
+5. 运行 sudo socksctl export 导出 v2rayN 和 Shadowrocket 连接信息。
 EOF

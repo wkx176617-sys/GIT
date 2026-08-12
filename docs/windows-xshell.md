@@ -38,7 +38,7 @@ root@server:~#
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.2.1 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.3.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 cd /root/socks5-toolkit
 ```
 
@@ -56,7 +56,7 @@ bash xshell-install.sh --port 31080
 
 如果服务器无法访问 GitHub：
 
-1. 在 Windows 下载本项目 `v1.2.1` 源码压缩包并解压。
+1. 在 Windows 下载本项目 `v1.3.0` 源码压缩包并解压。
 2. 在已连接的 Xshell 中选择“窗口 → 新建文件传输”，或者打开远程文件管理器。
 3. 将整个项目文件夹上传到 `/root/socks5-toolkit`。
 4. 回到 Xshell 执行：
@@ -99,6 +99,7 @@ Xshell 8 官方支持远程文件管理器，并可与 Xftp 通过 SFTP 上传�
 socksctl status
 socksctl check
 socksctl info
+socksctl export
 socksctl logs
 socksctl restart
 ```
@@ -108,6 +109,16 @@ socksctl restart
 ```bash
 socksctl credentials
 ```
+
+导入 v2rayN 时运行：
+
+```bash
+socksctl export v2rayn
+```
+
+复制输出的完整 `socks://...` 一行，在 v2rayN 中选择“从剪贴板导入批量 URL”。建议使用
+[v2rayN 官方当前稳定版](https://github.com/2dust/v2rayN/releases)。导入 Shadowrocket 时运行
+`socksctl qr shadowrocket`，再用手机扫码。以上链接和二维码包含完整密码，不要发给他人。
 
 ## 更新项目
 

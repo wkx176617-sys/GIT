@@ -2,7 +2,7 @@
 
 ## 推荐版本
 
-- 部署工具：`v1.2.1`（稳定版）
+- 部署工具：`v1.3.0`（稳定版）
 - 代理核心：GOST `3.2.6`（脚本固定版本并验证 SHA-256）
 - 推荐系统：Ubuntu 24.04 LTS `amd64`；已有 Ubuntu 22.04 节点可以继续使用
 - Windows 终端：Xshell 8
@@ -57,7 +57,7 @@ ss -lntp
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.2.1 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.3.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 cd /root/socks5-toolkit
 bash xshell-install.sh --port 31080
 ```
@@ -65,26 +65,26 @@ bash xshell-install.sh --port 31080
 ## 四、从 macOS 安装
 
 ```bash
-git clone --branch v1.2.1 --depth 1 git@github.com:wkx176617-sys/GIT.git
+git clone --branch v1.3.0 --depth 1 git@github.com:wkx176617-sys/GIT.git
 cd GIT
 ./deploy.sh root@VPS公网IP --port 31080
 ```
 
 脚本会上传安装文件、下载并校验固定 GOST 版本、生成独立账号密码、创建低权限服务账户并启用开机启动。
 
-## 五、保存凭据
+## 五、以后查询节点
 
-安装成功后，把下面信息保存到密码管理器，不要写入仓库：
+节点信息保存在对应 VPS 的 `/etc/gost-socks/node.env`，只有 root 可以读取。以后无论使用
+Mac 还是 Windows，只要通过 SSH/Xshell 登录该 VPS，就可以查询：
 
-```text
-VPS 公网 IP（同时作为节点名称）
-国家/地区
-VPS 公网 IP
-端口 31080
-SOCKS5 用户名
-SOCKS5 密码
-绑定的比特浏览器环境
+```bash
+socksctl info         # IP、端口、用户名、运行状态；密码打码
+socksctl credentials  # 完整手工连接信息
+socksctl export       # 手工信息和两个客户端导入链接
 ```
+
+不需要在 Mac 或 Windows 维护 Git 节点清单，也不要把导出结果上传 GitHub。你仍需保存 VPS
+公网 IP 和 SSH 登录凭据，否则无法进入服务器查询。
 
 ## 六、配置比特浏览器
 
@@ -134,6 +134,39 @@ socksctl version
 socksctl credentials
 ```
 
+### 导入 v2rayN（Windows）
+
+建议使用 v2rayN 官方当前稳定版。登录服务器运行：
+
+```bash
+socksctl export v2rayn
+```
+
+复制完整的 `socks://...` 一行，在 v2rayN 中使用“从剪贴板导入批量 URL”。该链接采用
+v2rayN 官方 SOCKS 分享格式；如果旧版无法识别，请先从
+[v2rayN 官方发布页](https://github.com/2dust/v2rayN/releases)升级。导入后先测试延迟和出口 IP。
+
+### 导入 Shadowrocket（小火箭）
+
+登录服务器运行：
+
+```bash
+socksctl qr shadowrocket
+```
+
+用 Shadowrocket 扫描终端二维码即可。也可以执行 `socksctl export shadowrocket`，复制
+`socks5://...` 链接后在 Shadowrocket 中导入。如果服务器提示缺少 `qrencode`，执行：
+
+```bash
+apt-get update
+apt-get install -y qrencode
+```
+
+如果当前 Shadowrocket 版本没有自动识别链接，使用同一命令输出的“文本配置”核对后手工新增；
+格式为 `节点名称=socks5,地址,端口,用户,密码`。
+
+二维码和链接都包含完整密码，只能由自己扫描或复制，不要通过第三方二维码网站生成。
+
 更换 SOCKS5 密码：
 
 ```bash
@@ -162,3 +195,4 @@ bash xshell-install.sh --port 31080
 - Ubuntu 24.04 LTS 的标准安全维护持续到 2029 年，适合作为新服务器的长期基础系统；Ubuntu 22.04 LTS 仍受支持到 2027 年，无需为了本工具立即升级：[Ubuntu 官方发布周期](https://ubuntu.com/about/release-cycle)。
 - GOST 3.2.6 是本项目当前固定并完成校验、配置解析和端到端代理测试的版本：[GOST 官方发布页](https://github.com/go-gost/gost/releases/tag/v3.2.6)。
 - Windows 教程以 Xshell 8 为准；Xshell 8 支持 SSH、远程文件管理器以及与 Xftp 的 SFTP 文件传输：[Xshell 8 官方功能](https://www.netsarang.com/en/xshell-all-features/)。
+- v2rayN 的 SOCKS 分享链接格式以官方源码中的 [SocksFmt](https://github.com/2dust/v2rayN/blob/master/v2rayN/ServiceLib/Handler/Fmt/SocksFmt.cs) 为依据。

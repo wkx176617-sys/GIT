@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly CONFIG_DIR="/etc/gost-socks"
+readonly CONFIG_DIR="${SOCKSCTL_CONFIG_DIR:-/etc/gost-socks}"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
 readonly SERVICE="gost-socks.service"
@@ -16,6 +16,8 @@ usage() {
   check [URL]       检查监听端口和代理出口
   info              显示节点信息（密码打码）
   credentials       显示完整账号密码
+  export [类型]     导出客户端连接信息：all、v2rayn、shadowrocket
+  qr [类型]         在终端生成二维码：v2rayn、shadowrocket
   logs [行数]       查看日志，默认 100 行
   restart           重启服务
   rotate            自动生成新密码并重启
@@ -33,20 +35,55 @@ require_root() {
 }
 
 load_env() {
-  require_root
+  if [[ $CONFIG_DIR == /etc/gost-socks ]]; then
+    require_root
+  fi
   [[ -f $ENV_FILE ]] || die "未找到节点配置：$ENV_FILE"
   # shellcheck disable=SC1090
   source "$ENV_FILE"
+  PUBLIC_IP=${PUBLIC_IP:-}
 }
 
 save_env() {
   cat >"$ENV_FILE" <<EOF
 NODE_NAME=$NODE_NAME
+PUBLIC_IP=$PUBLIC_IP
 SOCKS_PORT=$SOCKS_PORT
 SOCKS_USERNAME=$SOCKS_USERNAME
 SOCKS_PASSWORD=$SOCKS_PASSWORD
 EOF
   chmod 0600 "$ENV_FILE"
+}
+
+resolve_public_ip() {
+  if [[ $PUBLIC_IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    return
+  fi
+  if [[ $NODE_NAME =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    PUBLIC_IP=$NODE_NAME
+    return
+  fi
+  PUBLIC_IP=$(curl -4 --fail --silent --show-error --max-time 10 \
+    https://api.ipify.org 2>/dev/null || true)
+  [[ $PUBLIC_IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] \
+    || die "无法确定服务器公网 IPv4，请重新运行安装程序"
+}
+
+make_share_links() {
+  resolve_public_ip
+  local user_info
+  user_info=$(printf '%s' "$SOCKS_USERNAME:$SOCKS_PASSWORD" | base64 | tr -d '=\n')
+  user_info=${user_info//+/%2B}
+  user_info=${user_info//\//%2F}
+  V2RAYN_LINK="socks://${user_info}@${PUBLIC_IP}:${SOCKS_PORT}#${NODE_NAME}"
+  SHADOWROCKET_LINK="socks5://${SOCKS_USERNAME}:${SOCKS_PASSWORD}@${PUBLIC_IP}:${SOCKS_PORT}#${NODE_NAME}"
+  SHADOWROCKET_TEXT="${NODE_NAME}=socks5,${PUBLIC_IP},${SOCKS_PORT},${SOCKS_USERNAME},${SOCKS_PASSWORD}"
+}
+
+print_manual_fields() {
+  resolve_public_ip
+  printf '类型：SOCKS5\n服务器：%s\n端口：%s\n用户名：%s\n密码：%s\n节点名称：%s\n' \
+    "$PUBLIC_IP" "$SOCKS_PORT" "$SOCKS_USERNAME" "$SOCKS_PASSWORD" "$NODE_NAME"
 }
 
 render_config() {
@@ -95,13 +132,47 @@ case "$command_name" in
     ;;
   info)
     load_env
-    printf '节点名称：%s\n端口：%s\n用户名：%s\n密码：********\n' \
-      "$NODE_NAME" "$SOCKS_PORT" "$SOCKS_USERNAME"
+    resolve_public_ip
+    service_state=$(systemctl is-active "$SERVICE" 2>/dev/null || true)
+    printf '节点名称：%s\n服务器：%s\n端口：%s\n用户名：%s\n密码：********\n服务状态：%s\n' \
+      "$NODE_NAME" "$PUBLIC_IP" "$SOCKS_PORT" "$SOCKS_USERNAME" "$service_state"
     ;;
   credentials)
     load_env
-    printf '节点名称：%s\n端口：%s\n用户名：%s\n密码：%s\n' \
-      "$NODE_NAME" "$SOCKS_PORT" "$SOCKS_USERNAME" "$SOCKS_PASSWORD"
+    print_manual_fields
+    ;;
+  export)
+    load_env
+    export_type=${1:-all}
+    make_share_links
+    case "$export_type" in
+      all)
+        print_manual_fields
+        printf '\nv2rayN 导入链接：\n%s\n\nShadowrocket 导入链接：\n%s\n\nShadowrocket 文本配置：\n%s\n' \
+          "$V2RAYN_LINK" "$SHADOWROCKET_LINK" "$SHADOWROCKET_TEXT"
+        ;;
+      v2rayn) printf '%s\n' "$V2RAYN_LINK" ;;
+      shadowrocket)
+        printf 'Shadowrocket 导入链接：\n%s\n\nShadowrocket 文本配置：\n%s\n' \
+          "$SHADOWROCKET_LINK" "$SHADOWROCKET_TEXT"
+        ;;
+      *) die "导出类型只能是 all、v2rayn 或 shadowrocket" ;;
+    esac
+    printf '\n警告：以上内容包含完整密码，请勿发到群聊或公开 GitHub。\n' >&2
+    ;;
+  qr)
+    load_env
+    qr_type=${1:-shadowrocket}
+    make_share_links
+    command -v qrencode >/dev/null 2>&1 \
+      || die "服务器未安装 qrencode；请执行 apt-get update && apt-get install -y qrencode"
+    case "$qr_type" in
+      v2rayn) qr_link=$V2RAYN_LINK ;;
+      shadowrocket) qr_link=$SHADOWROCKET_LINK ;;
+      *) die "二维码类型只能是 v2rayn 或 shadowrocket" ;;
+    esac
+    printf '请使用自己的设备扫描，二维码包含完整节点密码。\n'
+    qrencode -t ANSIUTF8 "$qr_link"
     ;;
   logs)
     require_root
