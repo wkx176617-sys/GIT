@@ -1,0 +1,61 @@
+# 模块索引
+
+本页用于快速判断“某个问题应该改哪里”，防止所有功能继续堆进 `socksctl` 或安装器。
+
+## 核心模块
+
+| 模块 | 文件 | 状态 | 常驻 | 允许依赖 | 主要测试 |
+|---|---|---|---|---|---|
+| Mac部署 | `deploy.sh` | 核心入口 | 否 | SSH、SCP | 参数和帮助测试 |
+| Xshell部署 | `xshell-install.sh` | 核心入口 | 否 | Ubuntu基础命令 | 错误参数拦截 |
+| 安装升级 | `install.sh` | 核心 | 否 | systemd、curl、基础工具 | 版本、锁、服务边界 |
+| 旧节点质检 | `preflight.sh` | 核心只读 | 否 | systemd、ss | 镜像和端口分类 |
+| 受控迁移 | `overwrite.sh` | 兼容模块 | 否 | install、旧sing-box | 备份和回退标记 |
+| 日常入口 | `scripts/socksctl` | 核心接口 | 否 | doctor、safety | 导出、白名单、菜单 |
+| 健康诊断 | `scripts/socks-doctor` | 核心诊断 | 否 | systemd、ss、curl | 只读和有限重试 |
+| 安全状态 | `scripts/socks-safety` | 核心安全 | 否 | 文件系统、systemd | 快照、篡改、熔断 |
+| 卸载 | `uninstall.sh` | 核心生命周期 | 否 | systemd | 确认和清理范围 |
+
+正常运行时，上述脚本都不会驻留；只有 GOST 由 systemd 管理并持续提供 SOCKS5 服务。
+
+## 可选插件
+
+| 插件 | 版本 | 兼容主程序 | 自动启用 | 影响 |
+|---|---:|---|---|---|
+| BBR + FQ | `1.1.0` | `v1.4.0` 至当前 `v1.x` | 否 | 修改明确的 sysctl；不增加端口和常驻进程 |
+
+插件必须留在 `addons/插件名/`，提供独立说明、安装、健康检查、恢复/卸载和兼容声明。主程序
+不得直接调用或自动启用插件。
+
+## 文档模块
+
+| 目录或文件 | 用途 |
+|---|---|
+| `README.md` | GitHub首页，只保留定位、快速入口、模块地图和导航 |
+| `docs/tutorial.md` | 完整搭建、客户端配置和人工验收 |
+| `docs/windows-xshell.md` | Windows新手逐步操作和粘贴防错 |
+| `docs/troubleshooting.md` | 故障检查、恢复边界和Codex提问模板 |
+| `docs/project-principles.md` | 宗旨、性能预算和功能准入规则 |
+| `docs/architecture.md` | 模块职责和依赖方向 |
+| `docs/releases/` | 每个稳定版本的独立档案 |
+
+## 修改路由
+
+- 安装失败或镜像兼容：先看 `preflight.sh`、`install.sh`。
+- Xshell复制粘贴错误：先看 `xshell-install.sh` 和 Xshell 教程。
+- 服务、端口、资源或线路检测：改 `socks-doctor`，不要写入安装器。
+- 快照、事件、校验、熔断：改 `socks-safety`，不要让 `socksctl` 自己保存状态。
+- 用户命令和菜单：改 `socksctl`，复杂实现应下沉到对应模块。
+- 可选加速或未来非必要能力：进入 `addons/`，不得并入默认安装。
+- 只需解释的偶发问题：优先更新教程，不增加代码。
+
+## 模块变更验收
+
+任何模块修改至少需要：
+
+1. 保持已有稳定命令兼容，或按语义化版本明确迁移。
+2. 没有把凭据写入日志、报告、测试或Git历史。
+3. 不新增不必要的常驻进程、端口、定时任务和依赖。
+4. 故障路径能够停止并输出中文说明。
+5. 补充与改动风险相称的行为测试。
+6. 同步模块索引、教程、更新记录和版本说明。

@@ -1,0 +1,77 @@
+name: 故障反馈
+description: 提交已脱敏、可以复现的安装或运行问题
+title: "[故障] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请勿提交 SOCKS5/SSH 密码、私钥、Token、二维码、导入链接或客户资料。
+        建议先运行 `socksctl doctor --no-record` 和 `socksctl report`，并人工检查报告。
+  - type: input
+    id: version
+    attributes:
+      label: 工具版本
+      description: 运行 `awk -F= '$1=="TOOL_VERSION" {print $2}' /etc/gost-socks/node.env`
+      placeholder: 例如 1.7.1
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Ubuntu版本
+      options:
+        - Ubuntu 24.04
+        - Ubuntu 22.04
+        - Ubuntu 20.04
+        - 其他或不确定
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: 操作设备
+      options:
+        - Windows + Xshell
+        - macOS + Terminal/VS Code
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 问题现象
+      description: 写明首次出现时间和时区、影响一个窗口还是全部窗口、VPN是否开启。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从正常状态开始，逐步说明怎样再次出现问题。
+    validations:
+      required: true
+  - type: input
+    id: incident
+    attributes:
+      label: 事件编号
+      placeholder: INC-...；没有则填写“无”
+    validations:
+      required: true
+  - type: textarea
+    id: diagnosis
+    attributes:
+      label: 脱敏诊断结果
+      description: 粘贴 doctor 输出或人工检查后的 report；可删除公网IP，但不能包含任何密码或Token。
+      render: shell
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 隐私确认
+      options:
+        - label: 我已确认内容不包含密码、私钥、Token、二维码、导入链接或客户资料。
+          required: true
+        - label: 我尚未通过反复重装、删除配置或开放全部端口来掩盖现场。
+          required: true

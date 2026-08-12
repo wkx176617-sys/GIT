@@ -1,0 +1,58 @@
+name: 功能建议
+description: 提议兼容、轻量并有真实重复需求的改进
+title: "[建议] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        项目不以功能数量为目标。请先说明真实问题，再判断应更新教程、核心还是独立插件。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 真实问题
+      description: 这个问题发生了几次、影响谁、现有流程为什么不能解决？
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: 当前解决方法
+      description: 现在怎样处理，需要多少步骤，最容易在哪里出错？
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: 建议归属
+      options:
+        - 只更新教程
+        - 核心安装或管理
+        - 健康诊断或安全恢复
+        - 独立插件
+        - 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: 复杂度与性能影响
+      description: 是否增加常驻进程、端口、定时任务、依赖、用户步骤或模块耦合？没有也请写“无”。
+    validations:
+      required: true
+  - type: textarea
+    id: fallback
+    attributes:
+      label: 失败与回退
+      description: 原因不确定时怎样停止？怎样验证？怎样恢复到修改前？
+    validations:
+      required: true
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: 宗旨确认
+      options:
+        - label: 我已阅读项目宗旨，并确认该建议不能只通过更清楚的教程解决。
+          required: true
+        - label: 如果不是必要核心能力，我接受优先作为独立插件。
+          required: true
