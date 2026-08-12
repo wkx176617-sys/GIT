@@ -2,7 +2,7 @@
 
 这是一个面向 macOS + Linux VPS 的简化 SOCKS5 部署工具。目标是让每台 VPS 只提供一个直接 SOCKS5 节点，避免 3x-ui、VLESS、v2rayN 副本和多层本地端口造成混淆。
 
-当前推荐稳定版本：`v1.6.1`。新节点只使用稳定标签，不直接使用开发中的 `main`。
+当前推荐稳定版本：`v1.6.2`。新节点只使用稳定标签，不直接使用开发中的 `main`。
 
 > 网络检测公告：[当前设备与比特窗口网络检测网站](docs/announcements/network-check-links.md)
 
@@ -187,6 +187,9 @@ sudo socksctl recover      # 经确认后手工恢复最后可用状态
 sudo socksctl snapshots    # 查看 last-good 和 previous-good
 sudo socksctl note         # 交互式记录暂时说不清的问题
 sudo socksctl report       # 生成可交给 Codex 的脱敏故障报告
+sudo socksctl reports      # 查看服务器上的报告
+sudo socksctl report-delete # 确认后删除全部报告
+sudo socksctl guide        # 中文新手菜单，减少复制粘贴错误
 ```
 
 ## 最后可用状态与故障档案
@@ -214,6 +217,11 @@ socksctl note                   # 输入现象并获得事件编号
 没有端口冲突、未知错误等阻断信号时，才允许恢复健康快照。服务单独停止、端口被其他程序
 占用、系统资源异常和任何未知故障都会停止自动维修，保持配置不变并显示中文说明。
 需要人工处理时请阅读[手动检查、维修与 Codex 求助教程](docs/troubleshooting.md)。
+
+从 `v1.6.2` 起，`doctor --no-record` 提供严格只读检查；外部检测每个目标最多两次、重试间隔
+2 秒、单次超时 15 秒。服务 60 秒内最多自动启动 5 次，每次间隔 5 秒。同一种故障自动恢复
+一次后，30 分钟内再次出现会触发熔断，不再修改配置。恢复前必须验证快照结构和校验值。
+服务器最多自动保留最近 5 份脱敏报告。
 
 更新到本项目当前固定的 GOST 版本：重新运行同一个 `deploy.sh` 命令。已有节点名称、端口和凭据会被保留。新节点名称默认与 VPS 公网 IP 相同，无需额外命名。
 

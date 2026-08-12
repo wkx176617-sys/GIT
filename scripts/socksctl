@@ -32,6 +32,9 @@ usage() {
   snapshots         查看最后可用和前一可用快照
   note              交互式记录暂时无法归类的现象
   report            生成可交给 Codex 的脱敏故障报告
+  reports           查看服务器上的脱敏报告
+  report-delete     确认后删除服务器上的全部脱敏报告
+  guide             中文新手菜单（推荐）
 EOF
 }
 
@@ -55,10 +58,19 @@ load_env() {
     require_root
   fi
   [[ -f $ENV_FILE ]] || die "未找到节点配置：$ENV_FILE"
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
+  NODE_NAME=$(awk -F= '$1 == "NODE_NAME" {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE")
+  PUBLIC_IP=$(awk -F= '$1 == "PUBLIC_IP" {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE")
+  SOCKS_PORT=$(awk -F= '$1 == "SOCKS_PORT" {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE")
+  SOCKS_USERNAME=$(awk -F= '$1 == "SOCKS_USERNAME" {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE")
+  SOCKS_PASSWORD=$(awk -F= '$1 == "SOCKS_PASSWORD" {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE")
+  TOOL_VERSION=$(awk -F= '$1 == "TOOL_VERSION" {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE")
   PUBLIC_IP=${PUBLIC_IP:-}
   TOOL_VERSION=${TOOL_VERSION:-legacy}
+  [[ $NODE_NAME =~ ^[A-Za-z0-9._-]{2,32}$ \
+     && $SOCKS_PORT =~ ^[0-9]+$ && $SOCKS_PORT -ge 1024 && $SOCKS_PORT -le 65535 \
+     && $SOCKS_USERNAME =~ ^[A-Za-z0-9._-]{4,32}$ \
+     && $SOCKS_PASSWORD =~ ^[A-Za-z0-9._-]{16,64}$ ]] \
+    || die "节点记录格式异常。没有执行操作；请运行 socksctl doctor --no-record"
 }
 
 save_env() {
@@ -295,8 +307,15 @@ case "$command_name" in
       exit 2
     fi
 
+    if ! "$SAFETY" recovery-guard "$failure_codes"; then
+      incident_id=$($SAFETY incident RECOVERY_LOOP stopped needs-review "codes-$failure_codes")
+      printf '自动维修已熔断：相同问题在 30 分钟内已经恢复过一次，不再重复修改。\n' >&2
+      printf '当前状态保持不变。事件编号：%s。请运行 socksctl report。\n' "$incident_id" >&2
+      exit 2
+    fi
     incident_id=$($SAFETY incident HEAL_STARTED restore pending "whitelisted-$failure_codes")
     if "$SAFETY" restore && "$DOCTOR" --local; then
+      "$SAFETY" recovery-mark "$failure_codes"
       "$SAFETY" incident HEAL_COMPLETE restore success "parent-$incident_id" >/dev/null
       printf '维修完成，事件编号：%s。已恢复最后可用状态。\n' "$incident_id"
     else
@@ -375,7 +394,7 @@ case "$command_name" in
     trap cleanup_report EXIT
     chmod 0600 "$raw_report"
     doctor_status=0
-    doctor_output=$("$DOCTOR" 2>&1) || doctor_status=$?
+    doctor_output=$("$DOCTOR" --no-record 2>&1) || doctor_status=$?
     {
       printf '=== GOST SOCKS5 脱敏故障报告 ===\n'
       printf '生成时间(UTC)：%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -410,8 +429,81 @@ case "$command_name" in
     chmod 0600 "$report_file"
     rm -f -- "$raw_report"
     trap - EXIT
+    shopt -s nullglob
+    report_files=(/root/gost-socks-report-*.txt)
+    shopt -u nullglob
+    if (( ${#report_files[@]} > 5 )); then
+      remove_count=$((${#report_files[@]} - 5))
+      for ((report_index=0; report_index<remove_count; report_index++)); do
+        rm -f -- "${report_files[report_index]}"
+      done
+      printf '已自动删除 %s 份最旧报告，仅保留最近 5 份。\n' "$remove_count"
+    fi
     printf '脱敏报告已生成：%s\n' "$report_file"
     printf '先运行 cat %s 人工检查，再把从标题到结尾的完整内容提供给 Codex。\n' "$report_file"
+    ;;
+  reports)
+    require_root
+    [[ $# -eq 0 ]] || die "reports 不接受参数"
+    shopt -s nullglob
+    report_files=(/root/gost-socks-report-*.txt)
+    shopt -u nullglob
+    if (( ${#report_files[@]} == 0 )); then
+      printf '服务器上没有脱敏报告。\n'
+    else
+      printf '服务器上的脱敏报告（最多自动保留最近 5 份）：\n'
+      for report_path in "${report_files[@]}"; do
+        printf '%s\n' "$report_path"
+      done
+    fi
+    ;;
+  report-delete)
+    require_root
+    [[ $# -eq 0 ]] || die "report-delete 不接受参数"
+    [[ -t 0 ]] || die "删除报告必须在交互式 SSH/Xshell 窗口中确认"
+    shopt -s nullglob
+    report_files=(/root/gost-socks-report-*.txt)
+    shopt -u nullglob
+    (( ${#report_files[@]} > 0 )) || { printf '没有报告需要删除。\n'; exit 0; }
+    printf '将删除服务器上的 %s 份脱敏报告。输入 DELETE-REPORTS 确认：' "${#report_files[@]}"
+    read -r delete_answer
+    [[ $delete_answer == DELETE-REPORTS ]] || { printf '已取消。\n'; exit 0; }
+    for report_path in "${report_files[@]}"; do
+      rm -f -- "$report_path"
+    done
+    printf '脱敏报告已删除，无法从本工具恢复。\n'
+    ;;
+  guide)
+    require_root
+    [[ $# -eq 0 ]] || die "guide 不接受参数"
+    [[ -t 0 ]] || die "新手菜单需要在交互式 SSH/Xshell 窗口中使用"
+    cat <<'EOF'
+
+SOCKS5 中文新手菜单
+  1. 只读检查（推荐先运行，不写事件档案）
+  2. 记录问题现象
+  3. 生成给 Codex 的脱敏报告
+  4. 查看最近故障记录
+  5. 查看健康快照
+  6. 尝试白名单自动维修
+  7. 手工恢复最后可用状态（有二次确认）
+  8. 查看节点信息（密码打码）
+  0. 退出，不做任何操作
+EOF
+    printf '请输入一个数字后按回车：'
+    read -r guide_choice
+    case "$guide_choice" in
+      1) exec "$0" doctor --no-record ;;
+      2) exec "$0" note ;;
+      3) exec "$0" report ;;
+      4) exec "$0" incidents ;;
+      5) exec "$0" snapshots ;;
+      6) exec "$0" heal ;;
+      7) exec "$0" recover ;;
+      8) exec "$0" info ;;
+      0) printf '已退出，没有修改任何内容。\n' ;;
+      *) die "输入无效，没有执行任何操作；请重新运行 socksctl guide" ;;
+    esac
     ;;
   help|--help|-h)
     usage

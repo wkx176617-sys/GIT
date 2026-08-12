@@ -29,6 +29,10 @@
 root@server:~#
 ```
 
+只复制代码框中的命令，不要复制前面的 `root@server:~#`，也不要复制序号、中文说明或网页按钮
+文字。每次只粘贴一行，看到上一行执行完成并重新出现 `root@...#` 后，再粘贴下一行。下面的
+安装命令使用绝对路径，所以不需要自己判断当前位于哪个文件夹。
+
 如果看到的是 `Xshell:\>`，说明仍在 Windows 本地提示符，不要在那里运行 Linux 安装命令。
 
 ### 2. 下载固定版本
@@ -38,8 +42,7 @@ root@server:~#
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.6.1 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
-cd /root/socks5-toolkit
+git clone --branch v1.6.2 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 ```
 
 使用固定版本标签可以避免后续代码变化影响已记录的操作流程。
@@ -47,7 +50,7 @@ cd /root/socks5-toolkit
 ### 3. 安装节点
 
 ```bash
-bash xshell-install.sh --port 31080
+bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
 节点名称会自动使用 VPS 公网 IP。安装结束会显示服务器、端口、用户名和密码。立即保存到密码管理器，不要截图发到聊天群，也不要写进 Git。
@@ -56,7 +59,7 @@ bash xshell-install.sh --port 31080
 
 如果服务器无法访问 GitHub：
 
-1. 在 Windows 下载本项目 `v1.6.1` 源码压缩包并解压。
+1. 在 Windows 下载本项目 `v1.6.2` 源码压缩包并解压。
 2. 在已连接的 Xshell 中选择“窗口 → 新建文件传输”，或者打开远程文件管理器。
 3. 将整个项目文件夹上传到 `/root/socks5-toolkit`。
 4. 回到 Xshell 执行：

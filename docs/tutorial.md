@@ -2,7 +2,7 @@
 
 ## 推荐版本
 
-- 部署工具：`v1.6.1`（稳定版）
+- 部署工具：`v1.6.2`（稳定版）
 - 代理核心：GOST `3.2.6`（脚本固定版本并验证 SHA-256）
 - 推荐系统：Ubuntu 24.04 LTS `amd64`；已有 Ubuntu 22.04 节点可以继续使用
 - Windows 终端：Xshell 8
@@ -57,15 +57,14 @@ ss -lntp
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.6.1 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
-cd /root/socks5-toolkit
-bash xshell-install.sh --port 31080
+git clone --branch v1.6.2 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
 ## 四、从 macOS 安装
 
 ```bash
-git clone --branch v1.6.1 --depth 1 git@github.com:wkx176617-sys/GIT.git
+git clone --branch v1.6.2 --depth 1 git@github.com:wkx176617-sys/GIT.git
 cd GIT
 ./deploy.sh root@VPS公网IP --port 31080
 ```
@@ -218,6 +217,9 @@ socksctl snapshots       # 查看最后与前一健康快照
 socksctl recover previous # 退回前一健康版本
 socksctl note            # 交互式记录暂时无法分类的现象
 socksctl report          # 生成可交给 Codex 的脱敏故障报告
+socksctl reports         # 查询已有报告
+socksctl report-delete   # 二次确认后删除报告
+socksctl guide           # 中文编号菜单（新手推荐）
 ```
 
 事件编号形如 `INC-...`，可以运行 `socksctl incidents INC-完整编号` 查询。每条记录包含是否
@@ -237,6 +239,10 @@ socksctl report          # 生成可交给 Codex 的脱敏故障报告
 明确根因；服务未运行或端口未监听只能作为这些明确根因的伴随现象。端口冲突、单独的服务
 停止、未知错误和外部网络问题均会停止自动维修。完整人工流程见
 [手动检查、维修与 Codex 求助教程](troubleshooting.md)。
+
+不熟悉命令时只需运行 `socksctl guide`，输入一个数字选择操作。无效数字不会执行任何修改；
+自动维修与手工恢复仍保留各自的白名单和二次确认。诊断严格只读时使用
+`socksctl doctor --no-record`。
 
 ## 十、升级与回退
 

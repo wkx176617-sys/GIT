@@ -26,12 +26,21 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 overwrite=false
 install_args=()
-for arg in "$@"; do
-  if [[ $arg == --overwrite ]]; then
-    overwrite=true
-  else
-    install_args+=("$arg")
-  fi
+port=31080
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --overwrite) overwrite=true; shift ;;
+    --port)
+      [[ $# -ge 2 && $2 =~ ^[0-9]+$ ]] \
+        || die "--port 后面必须是端口数字，例如 --port 31080"
+      port=$2
+      install_args+=(--port "$2")
+      shift 2
+      ;;
+    *)
+      die "发现多余内容：$1。请只复制命令本身，不要复制 root@...#、说明文字或网页提示符"
+      ;;
+  esac
 done
 
 if command -v apt-get >/dev/null 2>&1; then
@@ -42,12 +51,6 @@ if command -v apt-get >/dev/null 2>&1; then
 else
   die "当前只支持使用 apt-get 的 Ubuntu 服务器"
 fi
-
-port=31080
-for ((index=0; index<${#install_args[@]}; index++)); do
-  [[ ${install_args[index]} == --port && $((index + 1)) -lt ${#install_args[@]} ]] \
-    && port=${install_args[index + 1]}
-done
 
 if [[ $overwrite == true ]]; then
   exec bash "$script_dir/overwrite.sh" "${install_args[@]}"

@@ -40,7 +40,7 @@ grep -q 'port=31080' "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.6.1"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.6.2"' "$project_dir/install.sh"
 grep -q '安全跳过' "$project_dir/install.sh"
 grep -q 'gost-socks-main.lock' "$project_dir/install.sh"
 grep -q 'INSTALL_UNKNOWN' "$project_dir/install.sh"
@@ -48,11 +48,19 @@ grep -q 'HEAL_BLOCKED_UNCERTAIN' "$project_dir/scripts/socksctl"
 grep -q 'CONFIG_MISSING|CONFIG_PERMISSION|CONFIG_MISMATCH' "$project_dir/scripts/socksctl"
 grep -q 'PORT_CONFLICT' "$project_dir/scripts/socks-doctor"
 grep -q 'CONFIG_INVALID' "$project_dir/scripts/socks-doctor"
-if grep -Fq 'source "$ENV_FILE"' "$project_dir/scripts/socks-doctor"; then
-  printf '诊断程序不应把待检查的凭据文件作为 Shell 代码载入。\n' >&2
+if rg -n 'source "?\$ENV_FILE' "$project_dir/install.sh" "$project_dir/scripts/socksctl" "$project_dir/scripts/socks-doctor"; then
+  printf '主程序不应把凭据文件作为 Shell 代码载入。\n' >&2
   exit 1
 fi
 grep -q '脱敏报告已生成' "$project_dir/scripts/socksctl"
+grep -q -- '--no-record' "$project_dir/scripts/socks-doctor"
+grep -q 'sleep 2' "$project_dir/scripts/socks-doctor"
+grep -q 'StartLimitIntervalSec=60' "$project_dir/install.sh"
+grep -q 'StartLimitBurst=5' "$project_dir/install.sh"
+grep -q 'RestartSec=5s' "$project_dir/install.sh"
+grep -q 'RECOVERY_LOOP' "$project_dir/scripts/socksctl"
+grep -q 'SOCKS5 中文新手菜单' "$project_dir/scripts/socksctl"
+grep -q 'allow-downgrade' "$project_dir/install.sh"
 if rg -n 'RESTART_RECOVERED|RESTART_RECOVERY_FAILED' "$project_dir/scripts/socksctl"; then
   printf '重启失败仍在自动恢复，不符合克制维修规则。\n' >&2
   exit 1
@@ -117,9 +125,25 @@ esac
 exit 0
 EOF
 chmod +x "$safety_test_dir/fakebin/systemctl"
-printf 'state=old\n' >"$safety_test_dir/etc/gost-socks/node.env"
+cat >"$safety_test_dir/etc/gost-socks/node.env" <<'EOF'
+NODE_NAME=old
+PUBLIC_IP=203.0.113.10
+SOCKS_PORT=31080
+SOCKS_USERNAME=node_example
+SOCKS_PASSWORD=0123456789abcdef0123456789abcdef
+TOOL_VERSION=1.6.1
+EOF
+cat >"$safety_test_dir/etc/gost-socks/gost.yaml" <<'EOF'
+services:
+  - addr: ":31080"
+    handler:
+      auth:
+        username: "node_example"
+        password: "0123456789abcdef0123456789abcdef"
+EOF
 printf 'binary-old\n' >"$safety_test_dir/usr/local/lib/gost-socks/gost"
-printf 'service-old\n' >"$safety_test_dir/systemd/gost-socks.service"
+chmod +x "$safety_test_dir/usr/local/lib/gost-socks/gost"
+printf 'ExecStart=/fake/gost\n' >"$safety_test_dir/systemd/gost-socks.service"
 safety_command=(env PATH="$safety_test_dir/fakebin:$PATH" \
   SOCKS_SAFETY_ROOT="$safety_test_dir/state" \
   SOCKS_CONFIG_DIR="$safety_test_dir/etc/gost-socks" \
@@ -127,14 +151,27 @@ safety_command=(env PATH="$safety_test_dir/fakebin:$PATH" \
   SOCKS_SERVICE_FILE="$safety_test_dir/systemd/gost-socks.service" \
   "$project_dir/scripts/socks-safety")
 transaction_snapshot=$("${safety_command[@]}" snapshot)
-printf 'state=new\n' >"$safety_test_dir/etc/gost-socks/node.env"
+"${safety_command[@]}" verify "$transaction_snapshot" | grep -Fq '快照校验通过'
+sed -i.bak 's/NODE_NAME=old/NODE_NAME=new/' "$safety_test_dir/etc/gost-socks/node.env"
+rm -f -- "$safety_test_dir/etc/gost-socks/node.env.bak"
 "${safety_command[@]}" promote "$transaction_snapshot" >/dev/null
-grep -Fq 'state=old' "$safety_test_dir/state/snapshots/previous-good/config/node.env"
-grep -Fq 'state=new' "$safety_test_dir/state/snapshots/last-good/config/node.env"
-printf 'state=broken\n' >"$safety_test_dir/etc/gost-socks/node.env"
+grep -Fq 'NODE_NAME=old' "$safety_test_dir/state/snapshots/previous-good/config/node.env"
+grep -Fq 'NODE_NAME=new' "$safety_test_dir/state/snapshots/last-good/config/node.env"
+printf 'broken\n' >"$safety_test_dir/etc/gost-socks/node.env"
 "${safety_command[@]}" restore "$safety_test_dir/state/snapshots/previous-good" >/dev/null
-grep -Fq 'state=old' "$safety_test_dir/etc/gost-socks/node.env"
+grep -Fq 'NODE_NAME=old' "$safety_test_dir/etc/gost-socks/node.env"
 "${safety_command[@]}" snapshots | grep -Fq 'previous-good'
+"${safety_command[@]}" recovery-guard CONFIG_MISSING
+"${safety_command[@]}" recovery-mark CONFIG_MISSING
+if "${safety_command[@]}" recovery-guard CONFIG_MISSING 2>/dev/null; then
+  printf '自动恢复熔断器没有阻止短时间内的相同故障。\n' >&2
+  exit 1
+fi
+printf 'tampered\n' >>"$safety_test_dir/state/snapshots/last-good/config/node.env"
+if "${safety_command[@]}" verify "$safety_test_dir/state/snapshots/last-good" >/dev/null 2>&1; then
+  printf '快照校验没有发现内容被修改。\n' >&2
+  exit 1
+fi
 rm -rf -- "$safety_test_dir"
 
 if command -v jq >/dev/null 2>&1; then

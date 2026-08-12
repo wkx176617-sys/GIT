@@ -11,7 +11,7 @@ readonly SERVICE="gost-socks.service"
 
 usage() {
   cat <<'EOF'
-内部安全工具：socks-safety <snapshot|promote|restore|snapshots|incident|incidents> [参数]
+内部安全工具：socks-safety <snapshot|promote|verify|restore|snapshots|incident|incidents> [参数]
 请优先使用 socksctl doctor、socksctl heal、socksctl recover 和 socksctl incidents。
 EOF
 }
@@ -92,6 +92,43 @@ copy_current_to() {
   systemctl is-active "$SERVICE" >"$destination/active-state" 2>/dev/null || true
   date -u +%Y-%m-%dT%H:%M:%SZ >"$destination/created-at"
   chmod -R go-rwx "$destination"
+  (
+    cd "$destination"
+    find . -type f ! -name MANIFEST.sha256 -print0 \
+      | sort -z | xargs -0 sha256sum >MANIFEST.sha256
+  )
+  chmod 0600 "$destination/MANIFEST.sha256"
+}
+
+validate_snapshot() {
+  local source=${1:-$SNAPSHOT_ROOT/last-good} env_file config_file port username password config_content
+  [[ -d $source/config && -d $source/binary && -f $source/gost-socks.service \
+     && -f $source/config/node.env && -f $source/config/gost.yaml \
+     && -x $source/binary/gost ]] || die "快照结构不完整：$source"
+  env_file="$source/config/node.env"
+  config_file="$source/config/gost.yaml"
+  port=$(awk -F= '$1 == "SOCKS_PORT" {print $2; exit}' "$env_file")
+  username=$(awk -F= '$1 == "SOCKS_USERNAME" {print $2; exit}' "$env_file")
+  password=$(awk -F= '$1 == "SOCKS_PASSWORD" {print $2; exit}' "$env_file")
+  [[ $port =~ ^[0-9]+$ && $port -ge 1024 && $port -le 65535 \
+     && $username =~ ^[A-Za-z0-9._-]{4,32}$ \
+     && $password =~ ^[A-Za-z0-9._-]{16,64}$ ]] \
+    || die "快照中的端口或凭据记录格式异常：$source"
+  config_content=$(<"$config_file")
+  [[ $config_content == *"addr: \":$port\""* \
+     && $config_content == *"username: \"$username\""* \
+     && $config_content == *"password: \"$password\""* ]] \
+    || die "快照配置与凭据记录不一致：$source"
+  grep -Fq 'ExecStart=' "$source/gost-socks.service" \
+    || die "快照服务定义不完整：$source"
+  if [[ -f $source/MANIFEST.sha256 ]]; then
+    (cd "$source" && sha256sum -c MANIFEST.sha256 >/dev/null) \
+      || die "快照校验值不匹配：$source"
+    printf '快照校验通过：%s\n' "$source"
+  else
+    # v1.6.1 及更早快照没有清单；仅允许结构兼容检查，下一次成功升级会生成带校验值的新快照。
+    printf '兼容检查通过（旧快照没有校验清单）：%s\n' "$source"
+  fi
 }
 
 snapshot_transaction() {
@@ -129,8 +166,7 @@ promote_current() {
 restore_snapshot() {
   local source=${1:-$SNAPSHOT_ROOT/last-good}
   init_state
-  [[ -d $source/config && -d $source/binary && -f $source/gost-socks.service ]] \
-    || die "快照不完整：$source"
+  validate_snapshot "$source" >/dev/null
   local restore_id stage_config stage_binary old_config old_binary old_service config_parent binary_parent
   restore_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
   config_parent=$(dirname "$CONFIG_DIR")
@@ -215,6 +251,30 @@ list_snapshots() {
   done
 }
 
+recovery_guard() {
+  local fingerprint=${1:-}
+  [[ $fingerprint =~ ^[A-Z0-9_,.-]{3,120}$ ]] || die "恢复指纹格式错误"
+  init_state
+  local guard_file="$STATE_ROOT/last-auto-recovery" previous_epoch previous_fingerprint now elapsed
+  [[ -f $guard_file ]] || return 0
+  read -r previous_epoch previous_fingerprint <"$guard_file" || return 0
+  [[ $previous_epoch =~ ^[0-9]+$ ]] || return 0
+  now=$(date +%s)
+  elapsed=$((now - previous_epoch))
+  if [[ $previous_fingerprint == "$fingerprint" && $elapsed -ge 0 && $elapsed -lt 1800 ]]; then
+    printf '相同故障在最近 30 分钟已经自动恢复过一次，熔断器阻止再次恢复。\n' >&2
+    return 4
+  fi
+}
+
+recovery_mark() {
+  local fingerprint=${1:-}
+  [[ $fingerprint =~ ^[A-Z0-9_,.-]{3,120}$ ]] || die "恢复指纹格式错误"
+  init_state
+  printf '%s %s\n' "$(date +%s)" "$fingerprint" >"$STATE_ROOT/last-auto-recovery"
+  chmod 0600 "$STATE_ROOT/last-auto-recovery"
+}
+
 command_name=${1:-help}
 shift || true
 if [[ $command_name == help || $command_name == --help || $command_name == -h ]]; then
@@ -227,9 +287,12 @@ fi
 case "$command_name" in
   snapshot) [[ $# -eq 0 ]] || die "snapshot 不接受参数"; snapshot_transaction ;;
   promote) [[ $# -le 1 ]] || die "promote 参数过多"; promote_current "${1:-}" ;;
+  verify) [[ $# -le 1 ]] || die "verify 参数过多"; validate_snapshot "${1:-$SNAPSHOT_ROOT/last-good}" ;;
   restore) [[ $# -le 1 ]] || die "restore 参数过多"; restore_snapshot "${1:-$SNAPSHOT_ROOT/last-good}" ;;
   incident) [[ $# -ge 1 && $# -le 4 ]] || die "incident 参数错误"; record_incident "$@" ;;
   incidents) [[ $# -le 1 ]] || die "incidents 参数过多"; list_incidents "${1:-20}" ;;
   snapshots) [[ $# -eq 0 ]] || die "snapshots 不接受参数"; list_snapshots ;;
+  recovery-guard) [[ $# -eq 1 ]] || die "recovery-guard 需要故障指纹"; recovery_guard "$1" ;;
+  recovery-mark) [[ $# -eq 1 ]] || die "recovery-mark 需要故障指纹"; recovery_mark "$1" ;;
   *) usage >&2; die "未知命令：$command_name" ;;
 esac

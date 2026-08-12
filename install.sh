@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
-readonly TOOL_VERSION_CURRENT="1.6.1"
+readonly TOOL_VERSION_CURRENT="1.6.2"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -18,7 +18,7 @@ readonly LOCK_FILE="/run/lock/gost-socks-main.lock"
 usage() {
   cat <<'EOF'
 用法：
-  sudo bash install.sh [--port 31080]
+  sudo bash install.sh [--port 31080] [--allow-downgrade]
 
 节点名称默认使用 VPS 公网 IP。用户名和密码会在首次安装时自动生成。
 重复安装会保留已有名称和凭据；特殊情况下可以使用 --name 自定义。
@@ -52,11 +52,13 @@ existing_port=""
 existing_username=""
 existing_password=""
 existing_public_ip=""
+allow_downgrade=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --name) [[ $# -ge 2 ]] || die "--name 缺少值"; node_name=$2; shift 2 ;;
     --port) [[ $# -ge 2 ]] || die "--port 缺少值"; port=$2; shift 2 ;;
+    --allow-downgrade) allow_downgrade=true; shift ;;
     --help|-h) usage; exit 0 ;;
     *) die "未知参数：$1" ;;
   esac
@@ -65,7 +67,7 @@ done
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.6.1 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.6.2 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
@@ -83,10 +85,18 @@ if [[ $missing_base == true ]]; then
   apt-get install -y ca-certificates coreutils curl findutils iproute2 passwd tar
 fi
 
+read_env_value() {
+  local key=$1
+  awk -F= -v wanted="$key" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE" 2>/dev/null || true
+}
+
 if [[ -f $ENV_FILE ]]; then
-  # 文件仅允许安全字符，并由本脚本以 root 权限创建。
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
+  NODE_NAME=$(read_env_value NODE_NAME)
+  PUBLIC_IP=$(read_env_value PUBLIC_IP)
+  SOCKS_PORT=$(read_env_value SOCKS_PORT)
+  SOCKS_USERNAME=$(read_env_value SOCKS_USERNAME)
+  SOCKS_PASSWORD=$(read_env_value SOCKS_PASSWORD)
+  TOOL_VERSION=$(read_env_value TOOL_VERSION)
   existing_node_name=$NODE_NAME
   existing_port=$SOCKS_PORT
   existing_username=$SOCKS_USERNAME
@@ -99,6 +109,29 @@ if [[ -f $ENV_FILE ]]; then
   existing_tool_version=${TOOL_VERSION:-legacy}
 fi
 existing_tool_version=${existing_tool_version:-none}
+
+version_is_newer() {
+  local left=$1 right=$2 left_major left_minor left_patch right_major right_minor right_patch
+  [[ $left =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && $right =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  IFS=. read -r left_major left_minor left_patch <<<"$left"
+  IFS=. read -r right_major right_minor right_patch <<<"$right"
+  (( left_major > right_major \
+    || (left_major == right_major && left_minor > right_minor) \
+    || (left_major == right_major && left_minor == right_minor && left_patch > right_patch) ))
+}
+
+if version_is_newer "$existing_tool_version" "$TOOL_VERSION_CURRENT"; then
+  [[ $allow_downgrade == true ]] \
+    || die "检测到已安装 v$existing_tool_version，高于当前 v$TOOL_VERSION_CURRENT。为防止误降级已停止；确认需要时添加 --allow-downgrade"
+  [[ -t 0 ]] || die "降级必须在交互式 SSH/Xshell 窗口中确认"
+  printf '降级可能恢复旧行为。输入 DOWNGRADE 确认：'
+  read -r downgrade_answer
+  [[ $downgrade_answer == DOWNGRADE ]] || die "已取消降级"
+fi
+
+available_kb=$(df -Pk / | awk 'NR == 2 {print $4}')
+[[ $available_kb =~ ^[0-9]+$ && $available_kb -ge 204800 ]] \
+  || die "系统盘可用空间不足 200MB，未开始修改"
 
 port=${port:-31080}
 
@@ -160,6 +193,11 @@ safety_source="$script_dir/socks-safety"
 [[ -f $safety_source ]] || die "安装包缺少 socks-safety"
 uninstall_source="$script_dir/uninstall.sh"
 [[ -f $uninstall_source ]] || die "安装包缺少 uninstall.sh"
+
+if [[ -d /var/lib/gost-socks-safety/snapshots/last-good ]]; then
+  bash "$safety_source" verify /var/lib/gost-socks-safety/snapshots/last-good >/dev/null \
+    || die "最后可用快照校验失败，已停止升级；请先运行 socksctl report 并人工检查"
+fi
 
 if [[ $existing_tool_version == "$TOOL_VERSION_CURRENT" \
    && $node_name == "$existing_node_name" \
@@ -269,6 +307,8 @@ cat >"$service_temp" <<EOF
 Description=GOST SOCKS5 Proxy ($node_name)
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -276,7 +316,7 @@ User=gost-socks
 Group=gost-socks
 ExecStart=$BINARY_PATH -C $CONFIG_FILE
 Restart=on-failure
-RestartSec=3s
+RestartSec=5s
 LimitNOFILE=65535
 NoNewPrivileges=true
 PrivateTmp=true

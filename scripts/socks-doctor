@@ -9,9 +9,10 @@ readonly SAFETY="${SOCKS_SAFETY_BIN:-/usr/local/sbin/socks-safety}"
 
 usage() {
   cat <<'EOF'
-用法：sudo socks-doctor [--local]
+用法：sudo socks-doctor [--local] [--no-record]
 
 默认执行本地确定性检查和多目标外部网络检查；--local 仅检查本机服务、配置和资源。
+--no-record 为严格只读模式，不写入事件档案。两个选项可以同时使用。
 诊断输出不包含 SOCKS5 密码。
 EOF
 }
@@ -19,17 +20,20 @@ EOF
 die() { printf '错误：%s\n' "$*" >&2; exit 1; }
 [[ ${1:-} != --help && ${1:-} != -h ]] || { usage; exit 0; }
 [[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"
-[[ $# -le 1 ]] || die "参数过多"
-
 local_only=false
-case "${1:-}" in
-  "") ;;
-  --local) local_only=true ;;
-  *) die "未知参数：$1" ;;
-esac
+record_events=true
+[[ $# -le 2 ]] || die "参数过多"
+for option in "$@"; do
+  case "$option" in
+    --local) local_only=true ;;
+    --no-record) record_events=false ;;
+    *) die "未知参数：$option" ;;
+  esac
+done
 
 record() {
   local code=$1 detail=$2
+  [[ $record_events == true ]] || return 0
   [[ -x $SAFETY ]] && "$SAFETY" incident "$code" doctor recorded "$detail" >/dev/null 2>&1 || true
 }
 
@@ -37,7 +41,11 @@ unexpected_error() {
   local line=$1 status=$2
   trap - ERR
   record DOCTOR_UNKNOWN "unexpected-command-failure-line-$line-status-$status"
-  printf '故障 [DOCTOR_UNKNOWN]：诊断程序在第 %s 行遇到未记录问题，已写入事件档案。\n' "$line" >&2
+  if [[ $record_events == true ]]; then
+    printf '故障 [DOCTOR_UNKNOWN]：诊断程序在第 %s 行遇到未记录问题，已写入事件档案。\n' "$line" >&2
+  else
+    printf '故障 [DOCTOR_UNKNOWN]：诊断程序在第 %s 行遇到未记录问题；严格只读模式未写入档案。\n' "$line" >&2
+  fi
   exit "$status"
 }
 trap 'unexpected_error $LINENO $?' ERR
@@ -182,6 +190,7 @@ if [[ $local_only == false ]]; then
         total_ms=$((total_ms + request_ms))
         proxy_success=$((proxy_success + 1))
       fi
+      [[ $attempt -eq 2 ]] || sleep 2
     done
   done
   if (( proxy_success == 0 )); then
