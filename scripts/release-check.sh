@@ -36,9 +36,9 @@ if (( current_major < minimum_major \
   printf 'BBR 插件要求主程序至少为 v%s\n' "$MAIN_MIN_VERSION" >&2
   exit 1
 fi
-grep -Fq '插件版本：`1.0.0`' addons/bbr/README.md \
+grep -Fq "插件版本：\`$PLUGIN_VERSION\`" addons/bbr/README.md \
   || { printf 'BBR 插件说明中的版本不一致\n' >&2; exit 1; }
-grep -Fq '插件版本 `1.0.0`' "docs/releases/$tag.md" \
+grep -Fq "BBR 插件 $PLUGIN_VERSION" "docs/releases/$tag.md" \
   || { printf '当前版本说明未记录 BBR 插件版本\n' >&2; exit 1; }
 
 while IFS= read -r existing_tag; do

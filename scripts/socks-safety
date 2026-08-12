@@ -1,0 +1,235 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly STATE_ROOT="${SOCKS_SAFETY_ROOT:-/var/lib/gost-socks-safety}"
+readonly SNAPSHOT_ROOT="$STATE_ROOT/snapshots"
+readonly INCIDENT_FILE="$STATE_ROOT/incidents.tsv"
+readonly CONFIG_DIR="${SOCKS_CONFIG_DIR:-/etc/gost-socks}"
+readonly BINARY_DIR="${SOCKS_BINARY_DIR:-/usr/local/lib/gost-socks}"
+readonly SERVICE_FILE="${SOCKS_SERVICE_FILE:-/etc/systemd/system/gost-socks.service}"
+readonly SERVICE="gost-socks.service"
+
+usage() {
+  cat <<'EOF'
+内部安全工具：socks-safety <snapshot|promote|restore|snapshots|incident|incidents> [参数]
+请优先使用 socksctl doctor、socksctl heal、socksctl recover 和 socksctl incidents。
+EOF
+}
+
+die() { printf '错误：%s\n' "$*" >&2; exit 1; }
+require_root() { [[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"; }
+
+init_state() {
+  install -d -m 0700 "$STATE_ROOT" "$SNAPSHOT_ROOT"
+  if [[ ! -f $INCIDENT_FILE ]]; then
+    printf 'ID\tUTC_TIME\tCODE\tFIRST_SEEN\tACTION\tRESULT\tDETAIL\n' >"$INCIDENT_FILE"
+    chmod 0600 "$INCIDENT_FILE"
+  fi
+}
+
+prune_transactions() {
+  local -a snapshots=()
+  local remove_count index
+  shopt -s nullglob
+  snapshots=("$SNAPSHOT_ROOT"/transaction-*)
+  shopt -u nullglob
+  if (( ${#snapshots[@]} >= 5 )); then
+    remove_count=$((${#snapshots[@]} - 4))
+    for ((index=0; index<remove_count; index++)); do
+      rm -rf -- "${snapshots[index]}"
+    done
+  fi
+}
+
+safe_field() {
+  printf '%s' "$1" | tr '\t\r\n' '   ' | cut -c1-160
+}
+
+record_incident() {
+  local code=${1:-UNKNOWN} action=${2:-none} result=${3:-recorded} detail=${4:-unspecified}
+  [[ $code =~ ^[A-Z0-9_-]{3,40}$ ]] || code=UNKNOWN
+  init_state
+  if command -v flock >/dev/null 2>&1; then
+    exec 7>"$STATE_ROOT/incidents.lock"
+    flock -w 5 7 || die "事件档案正在被另一个任务写入，请稍后重试"
+  fi
+  local fingerprint first_seen timestamp incident_id tool_version
+  tool_version=$(awk -F= '$1 == "TOOL_VERSION" {print $2}' "$CONFIG_DIR/node.env" 2>/dev/null || true)
+  [[ $tool_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || tool_version=unknown
+  # 未知故障和人工备注要按具体内容区分，避免不同问题被误判为同一条记录。
+  if [[ $code == *UNKNOWN* || $code == USER_OBSERVATION ]]; then
+    fingerprint=$(printf '%s|%s' "$code" "$detail" | sha256sum | awk '{print substr($1,1,10)}')
+  else
+    fingerprint=$(printf '%s' "$code" | sha256sum | awk '{print substr($1,1,10)}')
+  fi
+  if awk -F '\t' -v code="$code" -v fp="$fingerprint" 'NR > 1 && $3 == code && $7 ~ ("fingerprint=" fp) {found=1} END {exit !found}' "$INCIDENT_FILE"; then
+    first_seen=no
+  else
+    first_seen=yes
+  fi
+  timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  incident_id="INC-$(date -u +%Y%m%d-%H%M%S)-$fingerprint-${BASHPID:-$$}"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$incident_id" "$timestamp" "$code" "$first_seen" \
+    "$(safe_field "$action")" "$(safe_field "$result")" \
+    "$(safe_field "$detail");tool_version=$tool_version;fingerprint=$fingerprint" >>"$INCIDENT_FILE"
+  if (( $(wc -l <"$INCIDENT_FILE") > 2001 )); then
+    local trimmed="$STATE_ROOT/.incidents.trimmed.$$"
+    { head -n 1 "$INCIDENT_FILE"; tail -n 2000 "$INCIDENT_FILE"; } >"$trimmed"
+    chmod 0600 "$trimmed"
+    mv -f "$trimmed" "$INCIDENT_FILE"
+  fi
+  printf '%s\n' "$incident_id"
+}
+
+copy_current_to() {
+  local destination=$1
+  install -d -m 0700 "$destination"
+  [[ -d $CONFIG_DIR ]] && cp -a "$CONFIG_DIR" "$destination/config"
+  [[ -d $BINARY_DIR ]] && cp -a "$BINARY_DIR" "$destination/binary"
+  [[ -f $SERVICE_FILE ]] && cp -a "$SERVICE_FILE" "$destination/gost-socks.service"
+  systemctl is-enabled "$SERVICE" >"$destination/enabled-state" 2>/dev/null || true
+  systemctl is-active "$SERVICE" >"$destination/active-state" 2>/dev/null || true
+  date -u +%Y-%m-%dT%H:%M:%SZ >"$destination/created-at"
+  chmod -R go-rwx "$destination"
+}
+
+snapshot_transaction() {
+  init_state
+  prune_transactions
+  [[ -d $CONFIG_DIR && -d $BINARY_DIR && -f $SERVICE_FILE ]] || exit 3
+  local timestamp destination
+  timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+  destination="$SNAPSHOT_ROOT/transaction-$timestamp-$$"
+  copy_current_to "$destination"
+  printf '%s\n' "$destination"
+}
+
+promote_current() {
+  local previous_source=${1:-}
+  init_state
+  [[ -d $CONFIG_DIR && -d $BINARY_DIR && -f $SERVICE_FILE ]] \
+    || die "当前安装不完整，不能标记为最后可用状态"
+  local candidate="$SNAPSHOT_ROOT/.candidate-$$"
+  rm -rf -- "$candidate"
+  copy_current_to "$candidate"
+  rm -rf -- "$SNAPSHOT_ROOT/previous-good"
+  if [[ -d $SNAPSHOT_ROOT/last-good ]]; then
+    mv "$SNAPSHOT_ROOT/last-good" "$SNAPSHOT_ROOT/previous-good"
+  elif [[ -n $previous_source && -d $previous_source ]]; then
+    cp -a "$previous_source" "$SNAPSHOT_ROOT/previous-good"
+  fi
+  mv "$candidate" "$SNAPSHOT_ROOT/last-good"
+  if [[ -n $previous_source && -d $previous_source ]]; then
+    rm -rf -- "$previous_source"
+  fi
+  printf '已保存最后可用状态。\n'
+}
+
+restore_snapshot() {
+  local source=${1:-$SNAPSHOT_ROOT/last-good}
+  init_state
+  [[ -d $source/config && -d $source/binary && -f $source/gost-socks.service ]] \
+    || die "快照不完整：$source"
+  local restore_id stage_config stage_binary old_config old_binary old_service config_parent binary_parent
+  restore_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  config_parent=$(dirname "$CONFIG_DIR")
+  binary_parent=$(dirname "$BINARY_DIR")
+  stage_config=$(mktemp -d "$config_parent/.gost-socks.restore.XXXXXX")
+  stage_binary=$(mktemp -d "$binary_parent/.gost-socks.restore.XXXXXX")
+  cp -a "$source/config/." "$stage_config/"
+  cp -a "$source/binary/." "$stage_binary/"
+  old_config="$STATE_ROOT/.restore-old-config-$restore_id"
+  old_binary="$STATE_ROOT/.restore-old-binary-$restore_id"
+  old_service="$STATE_ROOT/.restore-old-service-$restore_id"
+  [[ -f $SERVICE_FILE ]] && cp -a "$SERVICE_FILE" "$old_service"
+  restore_failed() {
+    local status=$?
+    trap - ERR
+    set +e
+    systemctl stop "$SERVICE" >/dev/null 2>&1
+    rm -rf -- "$CONFIG_DIR" "$BINARY_DIR"
+    [[ -d $old_config ]] && mv "$old_config" "$CONFIG_DIR"
+    [[ -d $old_binary ]] && mv "$old_binary" "$BINARY_DIR"
+    [[ -f $old_service ]] && install -m 0644 "$old_service" "$SERVICE_FILE"
+    systemctl daemon-reload
+    systemctl restart "$SERVICE" >/dev/null 2>&1
+    rm -rf -- "$stage_config" "$stage_binary"
+    printf '快照恢复失败，已尝试放回恢复前文件。\n' >&2
+    exit "$status"
+  }
+  trap restore_failed ERR
+  systemctl stop "$SERVICE" >/dev/null 2>&1 || true
+  [[ -d $CONFIG_DIR ]] && mv "$CONFIG_DIR" "$old_config"
+  [[ -d $BINARY_DIR ]] && mv "$BINARY_DIR" "$old_binary"
+  mv "$stage_config" "$CONFIG_DIR"
+  mv "$stage_binary" "$BINARY_DIR"
+  install -m 0644 "$source/gost-socks.service" "$SERVICE_FILE"
+  systemctl daemon-reload
+  if [[ $(cat "$source/enabled-state" 2>/dev/null || true) == enabled ]]; then
+    systemctl enable "$SERVICE" >/dev/null
+  else
+    systemctl disable "$SERVICE" >/dev/null 2>&1 || true
+  fi
+  if [[ $(cat "$source/active-state" 2>/dev/null || true) == active ]]; then
+    systemctl restart "$SERVICE"
+    systemctl is-active --quiet "$SERVICE"
+  else
+    systemctl stop "$SERVICE" >/dev/null 2>&1 || true
+  fi
+  trap - ERR
+  rm -rf -- "$old_config" "$old_binary"
+  rm -f -- "$old_service"
+  printf '已恢复快照：%s\n' "$source"
+}
+
+list_incidents() {
+  local query=${1:-20}
+  init_state
+  if [[ $query == INC-* ]]; then
+    awk -F '\t' -v id="$query" 'BEGIN {OFS=" | "} NR == 1 || $1 == id {print $1,$2,$3,$4,$5,$6,$7}' "$INCIDENT_FILE"
+    awk -F '\t' -v id="$query" '$1 == id {found=1} END {exit !found}' "$INCIDENT_FILE" \
+      || die "未找到事件：$query"
+    return
+  fi
+  local lines=$query
+  [[ $lines =~ ^[0-9]+$ && $lines -ge 1 && $lines -le 200 ]] \
+    || die "记录数量必须是 1-200"
+  { head -n 1 "$INCIDENT_FILE"; tail -n +2 "$INCIDENT_FILE" | tail -n "$lines"; } \
+    | awk -F '\t' 'BEGIN {OFS=" | "} {print $1,$2,$3,$4,$5,$6,$7}'
+}
+
+list_snapshots() {
+  init_state
+  local name created version
+  printf '快照 | 创建时间(UTC) | 工具版本\n'
+  for name in last-good previous-good; do
+    if [[ -d $SNAPSHOT_ROOT/$name ]]; then
+      created=$(cat "$SNAPSHOT_ROOT/$name/created-at" 2>/dev/null || printf '未知')
+      version=$(awk -F= '$1 == "TOOL_VERSION" {print $2}' \
+        "$SNAPSHOT_ROOT/$name/config/node.env" 2>/dev/null || true)
+      printf '%s | %s | %s\n' "$name" "$created" "${version:-legacy}"
+    else
+      printf '%s | 无 | 无\n' "$name"
+    fi
+  done
+}
+
+command_name=${1:-help}
+shift || true
+if [[ $command_name == help || $command_name == --help || $command_name == -h ]]; then
+  usage
+  exit 0
+fi
+if [[ $STATE_ROOT == /var/lib/gost-socks-safety ]]; then
+  require_root
+fi
+case "$command_name" in
+  snapshot) [[ $# -eq 0 ]] || die "snapshot 不接受参数"; snapshot_transaction ;;
+  promote) [[ $# -le 1 ]] || die "promote 参数过多"; promote_current "${1:-}" ;;
+  restore) [[ $# -le 1 ]] || die "restore 参数过多"; restore_snapshot "${1:-$SNAPSHOT_ROOT/last-good}" ;;
+  incident) [[ $# -ge 1 && $# -le 4 ]] || die "incident 参数错误"; record_incident "$@" ;;
+  incidents) [[ $# -le 1 ]] || die "incidents 参数过多"; list_incidents "${1:-20}" ;;
+  snapshots) [[ $# -eq 0 ]] || die "snapshots 不接受参数"; list_snapshots ;;
+  *) usage >&2; die "未知命令：$command_name" ;;
+esac

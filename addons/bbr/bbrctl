@@ -4,6 +4,7 @@ set -Eeuo pipefail
 readonly STATE_DIR="/var/lib/gost-socks-bbr"
 readonly STATE_FILE="$STATE_DIR/original.conf"
 readonly SYSCTL_FILE="/etc/sysctl.d/99-gost-socks-bbr.conf"
+readonly LOCK_FILE="/run/lock/gost-socks-bbr.lock"
 
 usage() {
   cat <<'EOF'
@@ -12,13 +13,21 @@ usage() {
 命令：
   status    查看当前拥塞算法、队列规则和插件状态（只读）
   check     检查 Ubuntu、内核与 BBR 支持情况（只读）
+  health    检查实际设置、持久配置和配置冲突（只读）
   enable    保存当前设置并启用 BBR + FQ
+  repair    持久配置存在但失效时重新应用
   restore   恢复首次启用前的设置
 EOF
 }
 
 die() { printf '错误：%s\n' "$*" >&2; exit 1; }
 require_root() { [[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"; }
+
+acquire_lock() {
+  command -v flock >/dev/null 2>&1 || die "缺少 flock（util-linux）"
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || die "另一个 BBR 操作正在运行，请等待完成后重试"
+}
 
 read_sysctl() {
   sysctl -n "$1" 2>/dev/null || true
@@ -83,6 +92,28 @@ read_original() {
   [[ $ORIGINAL_CC =~ ^[A-Za-z0-9_-]+$ ]] || die "恢复记录中的拥塞算法格式错误"
 }
 
+effective_enabled() {
+  [[ $(read_sysctl net.core.default_qdisc) == fq \
+    && $(read_sysctl net.ipv4.tcp_congestion_control) == bbr ]]
+}
+
+find_conflicts() {
+  local source
+  CONFLICT_FILES=()
+  for source in /etc/sysctl.conf /etc/sysctl.d/*.conf; do
+    [[ -f $source && $source != "$SYSCTL_FILE" ]] || continue
+    if grep -Eq '^[[:space:]]*(net\.core\.default_qdisc|net\.ipv4\.tcp_congestion_control)[[:space:]]*=' "$source"; then
+      CONFLICT_FILES+=("$source")
+    fi
+  done
+}
+
+require_no_conflicts() {
+  find_conflicts
+  (( ${#CONFLICT_FILES[@]} == 0 )) \
+    || die "发现其他配置也在管理 BBR/FQ：${CONFLICT_FILES[*]}；请先人工确认，插件不会争抢设置"
+}
+
 command_name=${1:-help}
 shift || true
 [[ $# -eq 0 ]] || die "命令不接受额外参数"
@@ -92,8 +123,12 @@ case "$command_name" in
     printf '当前拥塞算法：%s\n' "$(read_sysctl net.ipv4.tcp_congestion_control)"
     printf '当前队列规则：%s\n' "$(read_sysctl net.core.default_qdisc)"
     printf '内核可用算法：%s\n' "$(read_sysctl net.ipv4.tcp_available_congestion_control)"
-    if [[ -f $SYSCTL_FILE ]]; then
-      printf '插件状态：已写入持久配置\n'
+    if [[ -f $SYSCTL_FILE ]] && effective_enabled; then
+      printf '插件状态：健康（BBR + FQ 已生效）\n'
+    elif [[ -f $SYSCTL_FILE ]]; then
+      printf '插件状态：配置存在但未完全生效，请运行 bbrctl health\n'
+    elif effective_enabled; then
+      printf '插件状态：BBR + FQ 由插件之外的配置启用，本插件不接管\n'
     else
       printf '插件状态：未启用\n'
     fi
@@ -104,11 +139,44 @@ case "$command_name" in
     printf '质检通过：系统和内核支持 BBR。当前设置如下：\n'
     "$0" status
     ;;
+  health)
+    check_platform
+    verify_bbr_supported
+    find_conflicts
+    if [[ -f $SYSCTL_FILE ]] && (( ${#CONFLICT_FILES[@]} > 0 )); then
+      printf '故障：发现其他 sysctl 配置管理相同参数：%s\n' "${CONFLICT_FILES[*]}"
+      exit 1
+    fi
+    if [[ ! -f $SYSCTL_FILE ]]; then
+      if (( ${#CONFLICT_FILES[@]} > 0 )); then
+        printf '正常：检测到其他配置管理相关参数，本插件未启用也不接管：%s\n' "${CONFLICT_FILES[*]}"
+        exit 0
+      fi
+      if effective_enabled; then
+        printf '健康：BBR + FQ 由其他机制启用；本插件保持未接管状态。\n'
+      else
+        printf '正常：插件尚未启用，系统继续使用当前设置。\n'
+      fi
+      exit 0
+    fi
+    effective_enabled || die "插件持久配置存在，但实际设置不是 BBR + FQ；可运行 bbrctl repair"
+    printf '健康：插件配置、BBR 和 FQ 均已生效。\n'
+    ;;
   enable)
     require_root
+    acquire_lock
     check_platform
     load_bbr
     verify_bbr_available
+    if [[ ! -f $SYSCTL_FILE ]] && effective_enabled; then
+      printf 'BBR + FQ 已由其他机制启用；插件不会重复接管或覆盖原来源。\n'
+      exit 0
+    fi
+    if [[ -f $SYSCTL_FILE ]] && effective_enabled; then
+      printf 'BBR + FQ 已经健康生效；重复 enable 已安全跳过。\n'
+      exit 0
+    fi
+    require_no_conflicts
     save_original_once
     rollback_enable() {
       read_original
@@ -130,10 +198,33 @@ EOF
     printf 'BBR + FQ 已启用并持久化；新建 TCP 连接会使用新设置。\n'
     "$0" status
     ;;
+  repair)
+    require_root
+    acquire_lock
+    check_platform
+    [[ -f $SYSCTL_FILE ]] || die "插件没有持久配置，无需修复；请先运行 bbrctl check"
+    require_no_conflicts
+    if effective_enabled; then
+      printf 'BBR + FQ 已经健康生效，无需修复。\n'
+      exit 0
+    fi
+    load_bbr
+    verify_bbr_available
+    sysctl -p "$SYSCTL_FILE" >/dev/null
+    effective_enabled || die "重新应用配置后仍未生效，请保持现状并人工检查内核和 sysctl"
+    printf 'BBR + FQ 已重新应用；请重新建立客户端连接后测试。\n'
+    ;;
   restore)
     require_root
+    acquire_lock
     check_platform
     read_original
+    if [[ ! -f $SYSCTL_FILE \
+       && $(read_sysctl net.core.default_qdisc) == "$ORIGINAL_QDISC" \
+       && $(read_sysctl net.ipv4.tcp_congestion_control) == "$ORIGINAL_CC" ]]; then
+      printf '当前已经是首次启用前的设置；重复 restore 已安全跳过。\n'
+      exit 0
+    fi
     rm -f -- "$SYSCTL_FILE"
     sysctl -w "net.core.default_qdisc=$ORIGINAL_QDISC" >/dev/null
     sysctl -w "net.ipv4.tcp_congestion_control=$ORIGINAL_CC" >/dev/null

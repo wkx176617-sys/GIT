@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly CONFIG_DIR="${SOCKS_CONFIG_DIR:-/etc/gost-socks}"
+readonly ENV_FILE="$CONFIG_DIR/node.env"
+readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
+readonly SERVICE="gost-socks.service"
+readonly SAFETY="${SOCKS_SAFETY_BIN:-/usr/local/sbin/socks-safety}"
+
+usage() {
+  cat <<'EOF'
+用法：sudo socks-doctor [--local]
+
+默认执行本地确定性检查和多目标外部网络检查；--local 仅检查本机服务、配置和资源。
+诊断输出不包含 SOCKS5 密码。
+EOF
+}
+
+die() { printf '错误：%s\n' "$*" >&2; exit 1; }
+[[ ${1:-} != --help && ${1:-} != -h ]] || { usage; exit 0; }
+[[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"
+[[ $# -le 1 ]] || die "参数过多"
+
+local_only=false
+case "${1:-}" in
+  "") ;;
+  --local) local_only=true ;;
+  *) die "未知参数：$1" ;;
+esac
+
+record() {
+  local code=$1 detail=$2
+  [[ -x $SAFETY ]] && "$SAFETY" incident "$code" doctor recorded "$detail" >/dev/null 2>&1 || true
+}
+
+unexpected_error() {
+  local line=$1 status=$2
+  trap - ERR
+  record DOCTOR_UNKNOWN "unexpected-command-failure-line-$line-status-$status"
+  printf '故障 [DOCTOR_UNKNOWN]：诊断程序在第 %s 行遇到未记录问题，已写入事件档案。\n' "$line" >&2
+  exit "$status"
+}
+trap 'unexpected_error $LINENO $?' ERR
+
+printf '=== SOCKS5 健康诊断（脱敏）===\n'
+local_errors=0
+warnings=0
+
+if [[ ! -f $ENV_FILE || ! -f $CONFIG_FILE ]]; then
+  printf '故障 [CONFIG_MISSING]：节点配置不完整。\n'
+  record CONFIG_MISSING config-or-env-missing
+  local_errors=$((local_errors + 1))
+else
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  printf '节点：%s:%s\n' "${PUBLIC_IP:-${NODE_NAME:-未知}}" "${SOCKS_PORT:-未知}"
+  printf '协议能力：SOCKS5 TCP；未启用 UDP 转发。\n'
+  env_mode=$(stat -c '%a' "$ENV_FILE")
+  config_mode=$(stat -c '%a' "$CONFIG_FILE")
+  config_owner=$(stat -c '%U:%G' "$CONFIG_FILE")
+  if [[ -L $ENV_FILE || -L $CONFIG_FILE \
+     || $env_mode != 600 || $config_mode != 640 \
+     || $config_owner != root:gost-socks ]]; then
+    printf '故障 [CONFIG_PERMISSION]：配置权限异常（env=%s, config=%s）。\n' "$env_mode" "$config_mode"
+    record CONFIG_PERMISSION "env-$env_mode-config-$config_mode-owner-$config_owner"
+    local_errors=$((local_errors + 1))
+  fi
+  config_content=$(<"$CONFIG_FILE")
+  if [[ $config_content != *"addr: \":$SOCKS_PORT\""* \
+     || $config_content != *"username: \"$SOCKS_USERNAME\""* \
+     || $config_content != *"password: \"$SOCKS_PASSWORD\""* ]]; then
+    printf '故障 [CONFIG_MISMATCH]：运行配置与 root 凭据记录不一致。\n'
+    record CONFIG_MISMATCH config-and-env-disagree
+    local_errors=$((local_errors + 1))
+  fi
+fi
+
+service_state=$(systemctl is-active "$SERVICE" 2>/dev/null || true)
+enabled_state=$(systemctl is-enabled "$SERVICE" 2>/dev/null || true)
+printf '服务状态：%s；开机启动：%s\n' "$service_state" "$enabled_state"
+if [[ $service_state != active ]]; then
+  printf '故障 [SERVICE_DOWN]：GOST 服务未运行。\n'
+  record SERVICE_DOWN "state-$service_state"
+  local_errors=$((local_errors + 1))
+fi
+
+restart_count=$(systemctl show "$SERVICE" -p NRestarts --value 2>/dev/null || true)
+if [[ $restart_count =~ ^[0-9]+$ && $restart_count -ge 3 ]]; then
+  printf '警告 [RESTART_LOOP]：本次启动周期内服务已自动重启 %s 次。\n' "$restart_count"
+  record RESTART_LOOP "restart-count-$restart_count"
+  warnings=$((warnings + 1))
+fi
+
+if [[ -n ${SOCKS_PORT:-} ]] && command -v ss >/dev/null 2>&1; then
+  listener=$(ss -H -lntp 2>/dev/null | awk -v port=":$SOCKS_PORT" '$4 ~ port "$" {print}')
+  if [[ $listener != *'"gost"'* ]]; then
+    printf '故障 [PORT_OWNER]：端口 %s 未由 GOST 监听。\n' "$SOCKS_PORT"
+    record PORT_OWNER "target-port-not-owned-by-gost"
+    local_errors=$((local_errors + 1))
+  fi
+fi
+
+disk_percent=$(df -P / | awk 'NR == 2 {gsub("%", "", $5); print $5}')
+if [[ $disk_percent =~ ^[0-9]+$ && $disk_percent -ge 90 ]]; then
+  printf '警告 [DISK_HIGH]：系统盘已使用 %s%%。\n' "$disk_percent"
+  record DISK_HIGH "root-used-$disk_percent-percent"
+  warnings=$((warnings + 1))
+fi
+
+memory_total=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || true)
+memory_available=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null || true)
+if [[ $memory_total =~ ^[0-9]+$ && $memory_available =~ ^[0-9]+$ && $memory_total -gt 0 ]]; then
+  memory_available_percent=$((memory_available * 100 / memory_total))
+  if (( memory_available_percent < 10 )); then
+    printf '警告 [MEMORY_LOW]：可用内存约为 %s%%。\n' "$memory_available_percent"
+    record MEMORY_LOW "available-$memory_available_percent-percent"
+    warnings=$((warnings + 1))
+  fi
+fi
+
+if command -v timedatectl >/dev/null 2>&1; then
+  time_sync=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)
+  if [[ $time_sync != yes ]]; then
+    printf '警告 [TIME_UNSYNC]：系统时间未确认同步。\n'
+    record TIME_UNSYNC ntp-not-synchronized
+    warnings=$((warnings + 1))
+  fi
+fi
+
+if journalctl -k -n 300 --no-pager 2>/dev/null | grep -qiE 'out of memory|oom-killer|killed process'; then
+  printf '警告 [RECENT_OOM]：内核日志中发现内存不足记录。\n'
+  record RECENT_OOM kernel-oom-record-found
+  warnings=$((warnings + 1))
+fi
+
+if (( local_errors > 0 )); then
+  printf '\n结论：本地确定性故障 %s 项，警告 %s 项。可以运行 socksctl heal 尝试恢复最后可用状态。\n' "$local_errors" "$warnings"
+  exit 1
+fi
+
+if [[ $local_only == false ]]; then
+  proxy_success=0
+  total_ms=0
+  total_tests=4
+  for test_url in https://api.ipify.org https://ifconfig.me/ip; do
+    for attempt in 1 2; do
+      request_time=$(curl --fail --silent --show-error --max-time 15 -o /dev/null \
+        -w '%{time_total}' --socks5-hostname "127.0.0.1:$SOCKS_PORT" \
+        --proxy-user "$SOCKS_USERNAME:$SOCKS_PASSWORD" "$test_url" 2>/dev/null || true)
+      if [[ $request_time =~ ^[0-9]+\.[0-9]+$ ]]; then
+        request_ms=$(awk -v seconds="$request_time" 'BEGIN {printf "%d", seconds * 1000}')
+        total_ms=$((total_ms + request_ms))
+        proxy_success=$((proxy_success + 1))
+      fi
+    done
+  done
+  if (( proxy_success == 0 )); then
+    printf '外部警告 [EXTERNAL_UNREACHABLE]：两个独立目标共四次请求均失败。\n'
+    printf '这可能是 VPS 出口、DNS、线路或检测站问题，不自动回退协议配置。\n'
+    record EXTERNAL_UNREACHABLE two-external-targets-failed
+    exit 2
+  elif (( proxy_success < 2 )); then
+    average_ms=$((total_ms / proxy_success))
+    printf '外部警告 [EXTERNAL_UNSTABLE]：请求成功 %s/%s，暂不将当前版本标记为可用。\n' \
+      "$proxy_success" "$total_tests"
+    record EXTERNAL_UNSTABLE "success-$proxy_success-of-$total_tests-average-${average_ms}ms"
+    exit 2
+  elif (( proxy_success < total_tests )); then
+    average_ms=$((total_ms / proxy_success))
+    printf '外部警告 [EXTERNAL_PARTIAL]：请求成功 %s/%s，成功请求平均 %sms；不自动维修。\n' \
+      "$proxy_success" "$total_tests" "$average_ms"
+    record EXTERNAL_PARTIAL "success-$proxy_success-of-$total_tests-average-${average_ms}ms"
+    warnings=$((warnings + 1))
+  else
+    average_ms=$((total_ms / proxy_success))
+    printf '代理外部检查：%s/%s 请求成功，平均总耗时 %sms。\n' "$proxy_success" "$total_tests" "$average_ms"
+    if (( average_ms >= 3000 )); then
+      printf '外部警告 [HIGH_LATENCY]：VPS 到检测目标的代理请求平均耗时较高。\n'
+      record HIGH_LATENCY "average-${average_ms}ms"
+      warnings=$((warnings + 1))
+    fi
+  fi
+fi
+
+printf '\n结论：本地服务正常，警告 %s 项。客户端仍需单独检查公网 IP、IPv6、WebRTC、DNS 和时区。\n' "$warnings"

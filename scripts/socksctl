@@ -6,6 +6,9 @@ readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
 readonly SERVICE="gost-socks.service"
 readonly BINARY="/usr/local/lib/gost-socks/gost"
+readonly SAFETY="/usr/local/sbin/socks-safety"
+readonly DOCTOR="/usr/local/sbin/socks-doctor"
+readonly LOCK_FILE="/run/lock/gost-socks-main.lock"
 
 usage() {
   cat <<'EOF'
@@ -22,6 +25,12 @@ usage() {
   restart           重启服务
   rotate            自动生成新密码并重启
   version           查看 GOST 版本
+  doctor [--local]  运行脱敏健康诊断，不自动修改
+  heal              本地确定性故障时恢复最后可用状态
+  recover [目标]    手工恢复：last（默认）或 previous
+  incidents [数量] 查询最近故障记录，默认 20 条
+  snapshots         查看最后可用和前一可用快照
+  note              交互式记录暂时无法归类的现象
 EOF
 }
 
@@ -34,6 +43,12 @@ require_root() {
   [[ $(id -u) -eq 0 ]] || die "请使用 sudo 运行"
 }
 
+acquire_lock() {
+  command -v flock >/dev/null 2>&1 || die "缺少 flock（util-linux）"
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || die "另一个安装、覆写或维修任务正在运行，请等待完成后重试"
+}
+
 load_env() {
   if [[ $CONFIG_DIR == /etc/gost-socks ]]; then
     require_root
@@ -42,17 +57,22 @@ load_env() {
   # shellcheck disable=SC1090
   source "$ENV_FILE"
   PUBLIC_IP=${PUBLIC_IP:-}
+  TOOL_VERSION=${TOOL_VERSION:-legacy}
 }
 
 save_env() {
-  cat >"$ENV_FILE" <<EOF
+  local temp_file
+  temp_file=$(mktemp "$CONFIG_DIR/.node.env.XXXXXX")
+  cat >"$temp_file" <<EOF
 NODE_NAME=$NODE_NAME
 PUBLIC_IP=$PUBLIC_IP
 SOCKS_PORT=$SOCKS_PORT
 SOCKS_USERNAME=$SOCKS_USERNAME
 SOCKS_PASSWORD=$SOCKS_PASSWORD
+TOOL_VERSION=$TOOL_VERSION
 EOF
-  chmod 0600 "$ENV_FILE"
+  chmod 0600 "$temp_file"
+  mv -f "$temp_file" "$ENV_FILE"
 }
 
 resolve_public_ip() {
@@ -87,7 +107,9 @@ print_manual_fields() {
 }
 
 render_config() {
-  cat >"$CONFIG_FILE" <<EOF
+  local temp_file
+  temp_file=$(mktemp "$CONFIG_DIR/.gost.yaml.XXXXXX")
+  cat >"$temp_file" <<EOF
 services:
   - name: "$NODE_NAME"
     addr: ":$SOCKS_PORT"
@@ -101,8 +123,9 @@ services:
     listener:
       type: tcp
 EOF
-  chown root:gost-socks "$CONFIG_FILE"
-  chmod 0640 "$CONFIG_FILE"
+  chown root:gost-socks "$temp_file"
+  chmod 0640 "$temp_file"
+  mv -f "$temp_file" "$CONFIG_FILE"
 }
 
 command_name=${1:-help}
@@ -182,12 +205,36 @@ case "$command_name" in
     ;;
   restart)
     require_root
-    systemctl restart "$SERVICE"
-    systemctl is-active --quiet "$SERVICE" || die "服务重启失败"
+    acquire_lock
+    [[ -x $SAFETY && -x $DOCTOR ]] || die "安全组件不完整，请先升级主程序"
+    if ! systemctl restart "$SERVICE" || ! systemctl is-active --quiet "$SERVICE"; then
+      incident_id=$($SAFETY incident RESTART_FAILED restore pending service-restart-failed)
+      if "$SAFETY" restore && "$DOCTOR" --local; then
+        "$SAFETY" incident RESTART_RECOVERED restore success "parent-$incident_id" >/dev/null
+        printf '服务重启失败，事件 %s 已记录，并已恢复最后可用状态。\n' "$incident_id"
+        exit 0
+      fi
+      "$SAFETY" incident RESTART_RECOVERY_FAILED restore failed "parent-$incident_id" >/dev/null 2>&1 || true
+      die "服务重启及自动恢复均失败；事件编号：$incident_id"
+    fi
     printf '服务已重启。\n'
     ;;
   rotate)
     load_env
+    acquire_lock
+    [[ -x $SAFETY && -x $DOCTOR ]] || die "安全组件不完整，请先升级主程序"
+    transaction_snapshot=$($SAFETY snapshot 2>/dev/null || true)
+    rotate_rollback() {
+      trap - ERR
+      incident_id=$($SAFETY incident ROTATE_FAILED rollback attempted password-rotation-failed || true)
+      if [[ -n $transaction_snapshot ]]; then
+        $SAFETY restore "$transaction_snapshot" >/dev/null 2>&1 || true
+      else
+        $SAFETY restore >/dev/null 2>&1 || true
+      fi
+      printf '密码轮换失败，已记录事件 %s，并尝试恢复原状态。\n' "$incident_id" >&2
+    }
+    trap rotate_rollback ERR
     if command -v openssl >/dev/null 2>&1; then
       SOCKS_PASSWORD=$(openssl rand -hex 16)
     else
@@ -197,11 +244,82 @@ case "$command_name" in
     render_config
     systemctl restart "$SERVICE"
     systemctl is-active --quiet "$SERVICE" || die "新密码生效后服务启动失败"
+    "$DOCTOR" --local >/dev/null
+    "$SAFETY" promote "$transaction_snapshot" >/dev/null
+    trap - ERR
     printf '密码已更新：%s\n请立即更新比特浏览器并保存到密码管理器。\n' "$SOCKS_PASSWORD"
     ;;
   version)
     require_root
     "$BINARY" -V
+    ;;
+  doctor)
+    require_root
+    [[ -x $DOCTOR ]] || die "未安装诊断工具，请先升级主程序"
+    exec "$DOCTOR" "$@"
+    ;;
+  incidents)
+    require_root
+    [[ -x $SAFETY ]] || die "未安装事件档案工具，请先升级主程序"
+    [[ $# -le 1 ]] || die "incidents 只接受数量或事件编号"
+    exec "$SAFETY" incidents "${1:-20}"
+    ;;
+  heal)
+    require_root
+    acquire_lock
+    [[ -x $SAFETY && -x $DOCTOR ]] || die "安全组件不完整，请先升级主程序"
+    if "$DOCTOR" --local; then
+      printf '本地协议状态正常，无需维修。\n'
+      exit 0
+    fi
+    incident_id=$($SAFETY incident HEAL_STARTED restore pending local-deterministic-failure)
+    if "$SAFETY" restore && "$DOCTOR" --local; then
+      "$SAFETY" incident HEAL_COMPLETE restore success "parent-$incident_id" >/dev/null
+      printf '维修完成，事件编号：%s。已恢复最后可用状态。\n' "$incident_id"
+    else
+      "$SAFETY" incident HEAL_FAILED restore failed "parent-$incident_id" >/dev/null 2>&1 || true
+      die "恢复尝试失败；事件编号：$incident_id，请查询日志并人工处理"
+    fi
+    ;;
+  recover)
+    require_root
+    acquire_lock
+    [[ -x $SAFETY && -x $DOCTOR ]] || die "安全组件不完整，请先升级主程序"
+    recover_target=${1:-last}
+    [[ $# -le 1 ]] || die "recover 只接受 last 或 previous"
+    case "$recover_target" in
+      last) snapshot_path=""; snapshot_label=last-good ;;
+      previous) snapshot_path="/var/lib/gost-socks-safety/snapshots/previous-good"; snapshot_label=previous-good ;;
+      *) die "recover 只接受 last 或 previous" ;;
+    esac
+    printf '将恢复 %s 快照，并中断当前连接。输入 RESTORE 确认：' "$snapshot_label"
+    read -r answer
+    [[ $answer == RESTORE ]] || { printf '已取消。\n'; exit 0; }
+    incident_id=$($SAFETY incident MANUAL_RECOVERY restore pending "user-requested-$snapshot_label")
+    if [[ -n $snapshot_path ]]; then
+      "$SAFETY" restore "$snapshot_path"
+    else
+      "$SAFETY" restore
+    fi
+    "$DOCTOR" --local
+    "$SAFETY" incident MANUAL_RECOVERY restore success "parent-$incident_id" >/dev/null
+    printf '恢复完成，事件编号：%s。\n' "$incident_id"
+    ;;
+  snapshots)
+    require_root
+    [[ $# -eq 0 ]] || die "snapshots 不接受参数"
+    [[ -x $SAFETY ]] || die "未安装快照工具，请先升级主程序"
+    exec "$SAFETY" snapshots
+    ;;
+  note)
+    require_root
+    [[ $# -eq 0 ]] || die "note 不接受命令行描述，避免内容留在历史记录中"
+    [[ -x $SAFETY ]] || die "未安装事件档案工具，请先升级主程序"
+    printf '请简短描述现象（不要输入账号、密码或私钥）：'
+    read -r observation
+    [[ -n $observation ]] || die "描述不能为空"
+    incident_id=$($SAFETY incident USER_OBSERVATION observe recorded "$observation")
+    printf '已保存为事件 %s。可运行 socksctl incidents %s 查询。\n' "$incident_id" "$incident_id"
     ;;
   help|--help|-h)
     usage

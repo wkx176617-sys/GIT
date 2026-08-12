@@ -1,6 +1,6 @@
 # 可选 BBR + FQ 加速插件
 
-插件版本：`1.0.0`
+插件版本：`1.1.0`
 
 主程序兼容范围：`v1.4.0` 至所有 `v1.x` 版本；不承诺兼容未来 `v2.x`。
 
@@ -39,6 +39,7 @@ bbrctl enable
 
 ```bash
 bbrctl status
+bbrctl health
 ```
 
 理想结果：
@@ -65,6 +66,15 @@ bash uninstall.sh
 ```
 
 卸载不会触碰 GOST、SOCKS5 凭据、端口、安全组或 sing-box 备份。
+
+重复执行 `enable` 或 `restore` 会被识别并安全跳过。持久配置存在但实际设置失效时运行：
+
+```bash
+bbrctl repair
+```
+
+如果 `/etc/sysctl.conf` 或 `/etc/sysctl.d/` 中另有文件管理相同参数，插件会停止启用或修复，
+避免两个加速工具反复覆盖。插件不会创建定时“重复加速”任务。
 
 ## 更新规则
 

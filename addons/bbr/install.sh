@@ -24,11 +24,13 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 [[ -f $script_dir/bbrctl ]] || die "插件目录缺少 bbrctl"
 [[ -f $script_dir/plugin.conf ]] || die "插件目录缺少 plugin.conf"
 
-if ! command -v sysctl >/dev/null 2>&1 || ! command -v modprobe >/dev/null 2>&1; then
+if ! command -v sysctl >/dev/null 2>&1 \
+  || ! command -v modprobe >/dev/null 2>&1 \
+  || ! command -v flock >/dev/null 2>&1; then
   command -v apt-get >/dev/null 2>&1 || die "缺少基础命令且无法使用 apt-get"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y kmod procps
+  apt-get install -y kmod procps util-linux
 fi
 
 install -m 0755 "$script_dir/bbrctl" /usr/local/sbin/bbrctl

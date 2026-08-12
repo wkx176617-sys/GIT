@@ -38,7 +38,7 @@ if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   printf '正在检查 Ubuntu 基础依赖...\n'
   apt-get update
-  apt-get install -y ca-certificates coreutils curl findutils iproute2 jq passwd qrencode tar
+  apt-get install -y ca-certificates coreutils curl findutils iproute2 jq passwd qrencode tar util-linux
 else
   die "当前只支持使用 apt-get 的 Ubuntu 服务器"
 fi

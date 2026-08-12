@@ -29,6 +29,14 @@ done
 (( port >= 1024 && port <= 65535 )) || die "端口范围必须为 1024-65535"
 [[ -z $node_name || $node_name =~ ^[A-Za-z0-9._-]{2,32}$ ]] || die "节点名称格式错误"
 
+if ! command -v flock >/dev/null 2>&1; then
+  command -v apt-get >/dev/null 2>&1 || die "缺少 flock（util-linux）"
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y util-linux
+fi
+exec 8>/run/lock/gost-socks-main.lock
+flock -n 8 || die "另一个安装、覆写或维修任务正在运行，请等待完成后重试"
+
 name_args=()
 [[ -n $node_name ]] && name_args=(--name "$node_name")
 
@@ -54,7 +62,7 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 listener=$(ss -H -lntp 2>/dev/null | awk -v port=":$port" '$4 ~ port "$" {print}')
 if [[ -z $listener || ( $listener == *'"gost"'* && -f /etc/gost-socks/node.env ) ]]; then
   printf '未发现需要覆写的旧服务，转为安全的标准安装/升级。\n'
-  exec bash "$script_dir/install.sh" --port "$port" "${name_args[@]}"
+  exec env SOCKS_LOCK_HELD=1 bash "$script_dir/install.sh" --port "$port" "${name_args[@]}"
 fi
 
 [[ $listener == *'"sing-box"'* ]] \
@@ -99,7 +107,7 @@ trap rollback ERR
 
 systemctl disable --now sing-box
 MIGRATE_SOCKS_USERNAME=$username MIGRATE_SOCKS_PASSWORD=$password \
-  bash "$script_dir/install.sh" --port "$port" "${name_args[@]}"
+  SOCKS_LOCK_HELD=1 bash "$script_dir/install.sh" --port "$port" "${name_args[@]}"
 /usr/local/sbin/socksctl check
 trap - ERR
 

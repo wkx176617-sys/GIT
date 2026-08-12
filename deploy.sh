@@ -66,7 +66,7 @@ for command_name in ssh scp; do
 done
 
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-for required_file in install.sh uninstall.sh preflight.sh overwrite.sh scripts/socksctl; do
+for required_file in install.sh uninstall.sh preflight.sh overwrite.sh scripts/socksctl scripts/socks-doctor scripts/socks-safety; do
   [[ -f "$project_dir/$required_file" ]] || die "缺少项目文件：$required_file"
 done
 
@@ -80,7 +80,8 @@ trap cleanup EXIT
 printf '正在连接 %s...\n' "$target"
 ssh "$target" "mkdir -p '$remote_dir'"
 scp "$project_dir/install.sh" "$project_dir/uninstall.sh" "$project_dir/preflight.sh" \
-  "$project_dir/overwrite.sh" "$project_dir/scripts/socksctl" "$target:$remote_dir/"
+  "$project_dir/overwrite.sh" "$project_dir/scripts/socksctl" "$project_dir/scripts/socks-doctor" \
+  "$project_dir/scripts/socks-safety" "$target:$remote_dir/"
 
 install_args="--port '$port'"
 if [[ -n $node_name ]]; then

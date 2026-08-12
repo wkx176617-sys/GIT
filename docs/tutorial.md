@@ -2,7 +2,7 @@
 
 ## 推荐版本
 
-- 部署工具：`v1.5.0`（稳定版）
+- 部署工具：`v1.6.0`（稳定版）
 - 代理核心：GOST `3.2.6`（脚本固定版本并验证 SHA-256）
 - 推荐系统：Ubuntu 24.04 LTS `amd64`；已有 Ubuntu 22.04 节点可以继续使用
 - Windows 终端：Xshell 8
@@ -57,7 +57,7 @@ ss -lntp
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.5.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.6.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 cd /root/socks5-toolkit
 bash xshell-install.sh --port 31080
 ```
@@ -65,7 +65,7 @@ bash xshell-install.sh --port 31080
 ## 四、从 macOS 安装
 
 ```bash
-git clone --branch v1.5.0 --depth 1 git@github.com:wkx176617-sys/GIT.git
+git clone --branch v1.6.0 --depth 1 git@github.com:wkx176617-sys/GIT.git
 cd GIT
 ./deploy.sh root@VPS公网IP --port 31080
 ```
@@ -154,6 +154,8 @@ socksctl info
 socksctl logs
 socksctl restart
 socksctl version
+socksctl doctor
+socksctl incidents
 ```
 
 显示完整凭据：
@@ -203,6 +205,33 @@ socksctl rotate
 
 更换后立即同步更新比特浏览器。
 
+### 故障诊断、记录与恢复
+
+```bash
+socksctl doctor          # 全面脱敏诊断；不自动修改
+socksctl doctor --local  # 只检查服务器本地确定性状态
+socksctl incidents       # 最近 20 条事件
+socksctl incidents 50    # 最近 50 条事件
+socksctl heal            # 本地确定性故障时恢复最后可用状态
+socksctl recover         # 明确确认后手工恢复
+socksctl snapshots       # 查看最后与前一健康快照
+socksctl recover previous # 退回前一健康版本
+socksctl note            # 交互式记录暂时无法分类的现象
+```
+
+事件编号形如 `INC-...`，可以运行 `socksctl incidents INC-完整编号` 查询。每条记录包含是否
+首次出现、故障类型、执行动作和结果，不包含 SOCKS5 密码。
+如果暂时无法描述原因，运行 `socksctl note`，按提示输入看到的现象（不要输入密码）；程序会
+先生成事件编号，以后可以继续补充分析。
+
+安装、升级和密码轮换会在修改前建立事务快照，通过服务、端口和代理验收后才更新“最后可用
+状态”。未预料的失败会先记录再回退。外部网络全部失败会记录为外部故障；它可能来自 VPN、
+萤光云安全组、服务商线路或检测网站，因此不会自动覆写本地协议。
+
+`recover` 默认恢复 `last-good`，适合当前文件损坏；`recover previous` 恢复 `previous-good`，
+适合新版本曾通过验收、但后来发现未知兼容问题。服务器只保留这两级健康快照，避免包含
+凭据的备份无限增长。
+
 ## 十、升级与回退
 
 升级前阅读 [更新记录](../CHANGELOG.md) 和对应的 [版本说明](releases/)。确认兼容后切换到指定标签并重新运行安装入口。安装器会保留已有节点名称、端口和凭据。
@@ -227,6 +256,7 @@ BBR 插件位于 `addons/bbr/`，与主程序分离。主程序更新不会自�
 cd /root/socks5-toolkit/addons/bbr
 bash install.sh
 bbrctl check
+bbrctl health
 bbrctl enable
 ```
 
@@ -234,6 +264,7 @@ bbrctl enable
 
 ```bash
 bbrctl status
+bbrctl repair
 bbrctl restore
 ```
 

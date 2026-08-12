@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
+readonly TOOL_VERSION_CURRENT="1.6.0"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -10,6 +11,9 @@ readonly BINARY_DIR="/usr/local/lib/gost-socks"
 readonly BINARY_PATH="$BINARY_DIR/gost"
 readonly CONTROL_PATH="/usr/local/sbin/socksctl"
 readonly UNINSTALL_PATH="/usr/local/sbin/socks-uninstall"
+readonly DOCTOR_PATH="/usr/local/sbin/socks-doctor"
+readonly SAFETY_PATH="/usr/local/sbin/socks-safety"
+readonly LOCK_FILE="/run/lock/gost-socks-main.lock"
 
 usage() {
   cat <<'EOF'
@@ -29,11 +33,25 @@ die() {
 [[ ${1:-} != "--help" && ${1:-} != "-h" ]] || { usage; exit 0; }
 [[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"
 [[ -d /run/systemd/system ]] || die "此系统未使用 systemd"
+if ! command -v flock >/dev/null 2>&1; then
+  command -v apt-get >/dev/null 2>&1 || die "缺少 flock（util-linux）"
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y util-linux
+fi
+if [[ ${SOCKS_LOCK_HELD:-0} != 1 ]]; then
+  exec 8>"$LOCK_FILE"
+  flock -n 8 || die "另一个安装、覆写或维修任务正在运行，请等待完成后重试"
+fi
 
 node_name=""
 port=""
 username=${MIGRATE_SOCKS_USERNAME:-}
 password=${MIGRATE_SOCKS_PASSWORD:-}
+existing_node_name=""
+existing_port=""
+existing_username=""
+existing_password=""
+existing_public_ip=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -47,7 +65,7 @@ done
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.4.0 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.6.0 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
@@ -69,11 +87,18 @@ if [[ -f $ENV_FILE ]]; then
   # 文件仅允许安全字符，并由本脚本以 root 权限创建。
   # shellcheck disable=SC1090
   source "$ENV_FILE"
+  existing_node_name=$NODE_NAME
+  existing_port=$SOCKS_PORT
+  existing_username=$SOCKS_USERNAME
+  existing_password=$SOCKS_PASSWORD
+  existing_public_ip=${PUBLIC_IP:-}
   node_name=${node_name:-$NODE_NAME}
   port=${port:-$SOCKS_PORT}
   username=${username:-$SOCKS_USERNAME}
   password=${password:-$SOCKS_PASSWORD}
+  existing_tool_version=${TOOL_VERSION:-legacy}
 fi
+existing_tool_version=${existing_tool_version:-none}
 
 port=${port:-31080}
 
@@ -110,6 +135,7 @@ for required_command in curl find install sha256sum ss systemctl tar useradd; do
 done
 
 public_ip=$(curl -4 --fail --silent --show-error --max-time 10 https://api.ipify.org 2>/dev/null || true)
+public_ip=${public_ip:-$existing_public_ip}
 if [[ -z $node_name ]]; then
   [[ $public_ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] \
     || die "无法自动获取 VPS 公网 IPv4，请检查网络后重试，或使用 --name 手动指定"
@@ -126,8 +152,28 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 control_source="$script_dir/socksctl"
 [[ -f $control_source ]] || control_source="$script_dir/scripts/socksctl"
 [[ -f $control_source ]] || die "安装包缺少 socksctl"
+doctor_source="$script_dir/socks-doctor"
+[[ -f $doctor_source ]] || doctor_source="$script_dir/scripts/socks-doctor"
+[[ -f $doctor_source ]] || die "安装包缺少 socks-doctor"
+safety_source="$script_dir/socks-safety"
+[[ -f $safety_source ]] || safety_source="$script_dir/scripts/socks-safety"
+[[ -f $safety_source ]] || die "安装包缺少 socks-safety"
 uninstall_source="$script_dir/uninstall.sh"
 [[ -f $uninstall_source ]] || die "安装包缺少 uninstall.sh"
+
+if [[ $existing_tool_version == "$TOOL_VERSION_CURRENT" \
+   && $node_name == "$existing_node_name" \
+   && $port == "$existing_port" \
+   && $username == "$existing_username" \
+   && $password == "$existing_password" \
+   && -x $DOCTOR_PATH \
+   && -d /var/lib/gost-socks-safety/snapshots/last-good \
+   && $(systemctl is-active gost-socks.service 2>/dev/null || true) == active ]]; then
+  if "$DOCTOR_PATH" --local >/dev/null 2>&1; then
+    printf '当前已是 v%s，配置与服务均正常；重复安装已安全跳过。\n' "$TOOL_VERSION_CURRENT"
+    exit 0
+  fi
+fi
 
 tmp_dir=$(mktemp -d)
 cleanup() { rm -rf -- "$tmp_dir"; }
@@ -148,24 +194,53 @@ tar -xzf "$tmp_dir/$archive" -C "$tmp_dir/extracted"
 downloaded_binary=$(find "$tmp_dir/extracted" -type f -name gost -print -quit)
 [[ -n $downloaded_binary ]] || die "归档内未找到 gost 可执行文件"
 
+transaction_snapshot=$(bash "$safety_source" snapshot 2>/dev/null || true)
+install_rollback() {
+  local line=$1 status=$2 code=${3:-INSTALL_UNKNOWN}
+  local detail=${4:-unexpected-install-failure-line-$line-status-$status}
+  trap - ERR
+  set +e
+  incident_id=$(bash "$safety_source" incident "$code" rollback pending "$detail")
+  if [[ -n $transaction_snapshot ]]; then
+    bash "$safety_source" restore "$transaction_snapshot" >/dev/null 2>&1
+    rollback_result=$?
+    if [[ $rollback_result -eq 0 ]]; then
+      bash "$safety_source" incident INSTALL_ROLLBACK rollback success "parent-$incident_id" >/dev/null
+      printf '安装遇到未记录问题，事件 %s 已保存，并已恢复修改前状态。\n' "$incident_id" >&2
+    else
+      bash "$safety_source" incident INSTALL_ROLLBACK rollback failed "parent-$incident_id" >/dev/null
+      printf '安装遇到未记录问题，事件 %s 已保存，但自动恢复失败。\n' "$incident_id" >&2
+    fi
+  else
+    printf '首次安装遇到问题，事件 %s 已保存；没有上一状态可以恢复。\n' "$incident_id" >&2
+  fi
+  exit "$status"
+}
+trap 'install_rollback $LINENO $?' ERR
+
 if ! id gost-socks >/dev/null 2>&1; then
   useradd --system --home-dir /nonexistent --shell /usr/sbin/nologin gost-socks
 fi
 
 install -d -m 0755 "$BINARY_DIR"
-install -m 0755 "$downloaded_binary" "$BINARY_PATH"
+install -m 0755 "$downloaded_binary" "$BINARY_PATH.new"
+mv -f "$BINARY_PATH.new" "$BINARY_PATH"
 install -d -m 0750 -o root -g gost-socks "$CONFIG_DIR"
 
-cat >"$ENV_FILE" <<EOF
+env_temp=$(mktemp "$CONFIG_DIR/.node.env.XXXXXX")
+cat >"$env_temp" <<EOF
 NODE_NAME=$node_name
 PUBLIC_IP=$public_ip
 SOCKS_PORT=$port
 SOCKS_USERNAME=$username
 SOCKS_PASSWORD=$password
+TOOL_VERSION=$TOOL_VERSION_CURRENT
 EOF
-chmod 0600 "$ENV_FILE"
+chmod 0600 "$env_temp"
+mv -f "$env_temp" "$ENV_FILE"
 
-cat >"$CONFIG_FILE" <<EOF
+config_temp=$(mktemp "$CONFIG_DIR/.gost.yaml.XXXXXX")
+cat >"$config_temp" <<EOF
 services:
   - name: "$node_name"
     addr: ":$port"
@@ -179,13 +254,17 @@ services:
     listener:
       type: tcp
 EOF
-chown root:gost-socks "$CONFIG_FILE"
-chmod 0640 "$CONFIG_FILE"
+chown root:gost-socks "$config_temp"
+chmod 0640 "$config_temp"
+mv -f "$config_temp" "$CONFIG_FILE"
 
 install -m 0755 "$control_source" "$CONTROL_PATH"
 install -m 0755 "$uninstall_source" "$UNINSTALL_PATH"
+install -m 0755 "$doctor_source" "$DOCTOR_PATH"
+install -m 0755 "$safety_source" "$SAFETY_PATH"
 
-cat >"$SERVICE_FILE" <<EOF
+service_temp=$(mktemp /etc/systemd/system/.gost-socks.service.XXXXXX)
+cat >"$service_temp" <<EOF
 [Unit]
 Description=GOST SOCKS5 Proxy ($node_name)
 After=network-online.target
@@ -214,15 +293,27 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 [Install]
 WantedBy=multi-user.target
 EOF
+chmod 0644 "$service_temp"
+mv -f "$service_temp" "$SERVICE_FILE"
 
 systemctl daemon-reload
 systemctl enable gost-socks.service
-systemctl restart gost-socks.service
+if ! systemctl restart gost-socks.service; then
+  install_rollback "$LINENO" 1 INSTALL_SERVICE_FAILED systemd-restart-failed
+fi
 sleep 1
-systemctl is-active --quiet gost-socks.service || {
+if ! systemctl is-active --quiet gost-socks.service; then
   systemctl --no-pager --full status gost-socks.service || true
-  die "服务启动失败"
-}
+  install_rollback "$LINENO" 1 INSTALL_SERVICE_FAILED service-not-active
+fi
+
+doctor_status=0
+"$DOCTOR_PATH" || doctor_status=$?
+if [[ $doctor_status -ne 0 ]]; then
+  install_rollback "$LINENO" "$doctor_status" INSTALL_VERIFICATION_FAILED "doctor-exit-$doctor_status"
+fi
+"$SAFETY_PATH" promote "$transaction_snapshot" >/dev/null
+trap - ERR
 
 public_ip=${public_ip:-<VPS公网IP>}
 

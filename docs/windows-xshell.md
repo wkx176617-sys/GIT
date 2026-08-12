@@ -38,7 +38,7 @@ root@server:~#
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.5.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.6.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 cd /root/socks5-toolkit
 ```
 
@@ -56,7 +56,7 @@ bash xshell-install.sh --port 31080
 
 如果服务器无法访问 GitHub：
 
-1. 在 Windows 下载本项目 `v1.5.0` 源码压缩包并解压。
+1. 在 Windows 下载本项目 `v1.6.0` 源码压缩包并解压。
 2. 在已连接的 Xshell 中选择“窗口 → 新建文件传输”，或者打开远程文件管理器。
 3. 将整个项目文件夹上传到 `/root/socks5-toolkit`。
 4. 回到 Xshell 执行：
@@ -86,10 +86,26 @@ BBR 插件不会随 SOCKS5 自动启用。需要时在 Xshell 中单独执行：
 cd /root/socks5-toolkit/addons/bbr
 bash install.sh
 bbrctl check
+bbrctl health
 bbrctl enable
 ```
 
 恢复原设置运行 `bbrctl restore`。完整说明见项目中的 `addons/bbr/README.md`。
+
+## Xshell 故障诊断与恢复
+
+```bash
+socksctl doctor
+socksctl incidents
+socksctl heal
+socksctl snapshots
+```
+
+`doctor` 不显示密码；`incidents` 可查询带编号的历史问题；`heal` 只在服务器本地确定性故障
+时恢复最后可用状态。若 Xshell 本身无法连接，应先检查 VPN 出口 IP、SSH 安全组和服务器状态，
+此时服务器内命令无法运行。
+新版本出现未知兼容问题时，先运行 `socksctl snapshots`，确认存在 `previous-good` 后执行
+`socksctl recover previous`，并按提示输入 `RESTORE`。
 
 ## 云安全组
 

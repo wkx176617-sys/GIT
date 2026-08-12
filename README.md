@@ -2,7 +2,7 @@
 
 这是一个面向 macOS + Linux VPS 的简化 SOCKS5 部署工具。目标是让每台 VPS 只提供一个直接 SOCKS5 节点，避免 3x-ui、VLESS、v2rayN 副本和多层本地端口造成混淆。
 
-当前推荐稳定版本：`v1.5.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
+当前推荐稳定版本：`v1.6.0`。新节点只使用稳定标签，不直接使用开发中的 `main`。
 
 > 网络检测公告：[当前设备与比特窗口网络检测网站](docs/announcements/network-check-links.md)
 
@@ -79,14 +79,16 @@ sudo bash overwrite.sh --port 31080
 
 ## 可选 BBR 加速插件
 
-仓库提供独立的 [BBR + FQ 插件](addons/bbr/README.md)，插件版本为 `1.0.0`。它兼容当前
+仓库提供独立的 [BBR + FQ 插件](addons/bbr/README.md)，插件版本为 `1.1.0`。它兼容当前
 `main`/`v1.x`，但不属于 SOCKS5 主程序：主程序安装、升级和覆写都不会自动安装或启用它。
 
 ```bash
 cd /root/socks5-toolkit/addons/bbr
 bash install.sh       # 只安装管理命令，不改变网络
 bbrctl check          # 只读质检
+bbrctl health         # 检查实际状态和配置冲突
 bbrctl enable         # 确认需要后才启用
+bbrctl repair         # 配置存在但失效时明确修复
 bbrctl restore        # 恢复首次启用前的设置
 ```
 
@@ -177,7 +179,34 @@ sudo socksctl logs         # 最近 100 行日志
 sudo socksctl restart      # 重启服务
 sudo socksctl rotate       # 自动生成新密码并重启
 sudo socksctl version      # GOST 版本
+sudo socksctl doctor       # 脱敏诊断：服务、端口、资源、外部稳定性
+sudo socksctl incidents    # 查看最近故障事件及事件编号
+sudo socksctl heal         # 本地确定性故障时恢复最后可用状态
+sudo socksctl recover      # 经确认后手工恢复最后可用状态
+sudo socksctl snapshots    # 查看 last-good 和 previous-good
+sudo socksctl note         # 交互式记录暂时说不清的问题
 ```
+
+## 最后可用状态与故障档案
+
+从 `v1.6.0` 起，安装、升级和密码轮换采用事务式保护：修改前保存当前状态，修改后进行本地
+与外部验收，通过后才标记为“最后可用状态”。未预料的失败会生成 `INC-...` 事件编号并尝试
+恢复修改前状态。相同症状会标记为重复出现，记录可在任何设备登录服务器后查询：
+
+```bash
+socksctl incidents              # 最近 20 条
+socksctl incidents 50           # 最近 50 条
+socksctl incidents INC-事件编号 # 查询指定事件
+socksctl snapshots              # 查看两级健康快照
+socksctl recover previous       # 退回前一健康版本
+socksctl note                   # 输入现象并获得事件编号
+```
+
+只有服务、配置、权限和端口等本地确定性故障允许 `socksctl heal` 回退。VPN 出口变化、云安全
+组、VPS 线路和检测网站等外部故障只记录，不盲目覆写协议。恢复是“尽力恢复”，服务器被删除、
+磁盘损坏或 SSH 完全失联时，服务器内快照无法提供保证。
+恢复只回退协议二进制、配置、凭据和服务定义；诊断与事件查询工具保持最新版，确保回退后
+仍能查看刚刚发生的问题。
 
 更新到本项目当前固定的 GOST 版本：重新运行同一个 `deploy.sh` 命令。已有节点名称、端口和凭据会被保留。新节点名称默认与 VPS 公网 IP 相同，无需额外命名。
 
@@ -229,6 +258,8 @@ xshell-install.sh        Windows Xshell 登录后的部署入口
 install.sh               VPS 安装/升级脚本
 uninstall.sh             VPS 卸载脚本
 scripts/socksctl         VPS 管理命令
+scripts/socks-doctor     脱敏健康诊断与延迟/稳定性分类
+scripts/socks-safety     最后可用快照、恢复和可查询事件档案
 preflight.sh             Ubuntu 镜像、旧服务和端口只读质检
 overwrite.sh             备份并迁移受支持的旧 sing-box SOCKS5
 docs/windows-xshell.md   Windows + Xshell 图文式步骤
