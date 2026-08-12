@@ -3,7 +3,7 @@
 本页只负责告诉新手“现在做什么、下一步去哪”。Mac、Windows、客户端、故障和插件细节各自
 只有一个专题来源，不在这里重复展开。
 
-当前推荐工具：`v1.7.4`；GOST：`3.2.6`。新节点推荐 Ubuntu 24.04 LTS `amd64`，已有
+当前推荐工具：`v1.7.5`；GOST：`3.2.6`。新节点推荐 Ubuntu 24.04 LTS `amd64`，已有
 Ubuntu 22.04 节点无需为本工具重装。
 
 ## 先看最终路线
@@ -94,7 +94,7 @@ Mac 或 Windows 保存本地节点清单。
 | 旧服务器已有代理 | 对应的 [Mac](macos.md) 或 [Windows](windows-xshell.md) 教程中的“旧节点” |
 | 协议异常、延迟高或原因不明 | [故障处理教程](troubleshooting.md) |
 | 查询复制链接或二维码 | [客户端导入与网络验收](clients.md) |
-| 考虑开启 BBR | [BBR 插件教程](../addons/bbr/README.md) |
+| 考虑额外加速或扩展 | [可选插件中心](../addons/README.md) |
 | 准备升级或回退 | [版本规则](version-policy.md)和对应[版本说明](releases/) |
 
 BBR 不是协议必需组件，主程序不会自动安装或启用它。标准 SOCKS5 是 TCP 代理，不是加密

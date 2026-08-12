@@ -4,20 +4,20 @@
 
 **少步骤搭建 · 中文防呆 · 轻量运行 · 可恢复复盘 · 插件化扩展**
 
-[![稳定版本](https://img.shields.io/badge/稳定版本-v1.7.4-1677ff)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.7.4)
+[![稳定版本](https://img.shields.io/badge/稳定版本-v1.7.5-1677ff)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.7.5)
 [![自动检查](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml/badge.svg)](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%20%7C%2022.04%20%7C%2024.04-E95420)
 ![GOST](https://img.shields.io/badge/GOST-3.2.6-2f81f7)
 ![运行方式](https://img.shields.io/badge/管理工具-按需运行-2ea44f)
 
-[新手安装](#新手安装) · [日常使用](#日常使用) · [模块地图](#模块地图) · [故障求助](#故障求助) · [项目宗旨](#项目宗旨)
+[新手安装](#新手安装) · [日常使用](#日常使用) · [模块地图](#模块地图) · [可选插件](#可选插件) · [故障求助](#故障求助)
 
 </div>
 
 这是一个面向新手的轻量 SOCKS5 部署工具。每台 Ubuntu VPS 运行一个 GOST 节点，默认使用
 `31080/TCP`；Mac 或 Windows 只负责 SSH/Xshell 和浏览器，不运行本项目后台服务。
 
-> 当前推荐稳定版本：`v1.7.4`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
+> 当前推荐稳定版本：`v1.7.5`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
 
 ## 项目宗旨
 
@@ -45,7 +45,7 @@ SSH 登录 Ubuntu VPS，看到 `root@...#` 后，每次只复制一行：
 
 ```bash
 apt-get update && apt-get install -y git ca-certificates
-git clone --branch v1.7.4 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.7.5 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
@@ -89,7 +89,7 @@ socksctl report              # 生成可交给 Codex 的脱敏报告
 | 统一管理 | `socksctl` | 按需 | 中文菜单和稳定命令入口 |
 | 健康诊断 | `socks-doctor` | 按需、可严格只读 | 服务、端口、资源和有限外部检测 |
 | 安全恢复 | `socks-safety` | 按需 | 事件、快照校验、熔断和恢复 |
-| 可选插件 | `addons/bbr/` | 用户明确启用 | BBR + FQ，不被主程序自动调用 |
+| 可选插件 | [插件中心](addons/README.md) | 用户明确启用 | 独立登记、安装、检查、恢复和卸载 |
 | 教程与版本 | `docs/` | 不运行 | 新手步骤、故障复盘和版本档案 |
 
 详细文件、依赖和扩展规则见[模块索引](docs/modules.md)。
@@ -100,6 +100,17 @@ socksctl report              # 生成可交给 Codex 的脱敏报告
 
 协议能力为 SOCKS5 TCP；当前未启用 UDP 转发。项目不安装 Web 面板、数据库、Docker、cron
 或 systemd timer，也不额外开放管理端口。
+
+## 可选插件
+
+> 首次搭建不需要插件。先完成 SOCKS5 安装和客户端验收；没有明确问题时保持不安装。
+
+| 插件 | 状态 | 用途 | 查看 |
+|---|---|---|---|
+| BBR + FQ `1.1.0` | 独立可选 | 改善部分高延迟或丢包 TCP 线路 | [插件说明](addons/bbr/README.md) |
+
+统一入口见[可选插件中心](addons/README.md)。插件不会自动修改 GOST、节点 IP、端口或凭据，
+也不能改善 IP 质量、DNS、WebRTC、加密或平台风控。
 
 ## 安全与恢复
 
@@ -139,6 +150,7 @@ socksctl report
 | 导入 v2rayN、小火箭或比特浏览器 | [客户端导入与网络验收](docs/clients.md) |
 | 检查网络隔离 | [网络检测网站公告](docs/announcements/network-check-links.md) |
 | 手动检查或向 Codex 求助 | [故障处理教程](docs/troubleshooting.md) |
+| 查看或选择可选插件 | [可选插件中心](addons/README.md) |
 | 理解项目模块 | [模块索引](docs/modules.md) |
 | 修改或扩展项目 | [开发规则](AGENTS.md) · [项目宗旨](docs/project-principles.md) · [轻量架构](docs/architecture.md) |
 | 查看版本变化 | [更新记录](CHANGELOG.md) · [各版本说明](docs/releases/) |

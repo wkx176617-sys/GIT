@@ -56,8 +56,17 @@ grep -Fq '正常工作时只有 GOST 常驻' docs/architecture.md \
   || { printf '架构说明缺少按需运行边界\n' >&2; exit 1; }
 grep -Fq '## 修改路由' docs/modules.md \
   || { printf '模块索引缺少修改路由\n' >&2; exit 1; }
-[[ -f addons/bbr/plugin.conf && -f addons/bbr/README.md ]] \
-  || { printf '缺少 BBR 插件兼容声明或说明\n' >&2; exit 1; }
+[[ -f addons/README.md && -f addons/bbr/plugin.conf && -f addons/bbr/README.md ]] \
+  || { printf '缺少插件中心、BBR兼容声明或说明\n' >&2; exit 1; }
+grep -Fq '[可选插件中心](addons/README.md)' README.md \
+  || { printf 'README 未提供独立插件中心入口\n' >&2; exit 1; }
+while IFS= read -r plugin_conf; do
+  plugin_dir=$(dirname "$plugin_conf")
+  plugin_slug=$(basename "$plugin_dir")
+  [[ -f "$plugin_dir/README.md" ]] || { printf '插件缺少独立说明：%s\n' "$plugin_slug" >&2; exit 1; }
+  grep -Fq "($plugin_slug/README.md)" addons/README.md \
+    || { printf '插件没有登记到插件中心：%s\n' "$plugin_slug" >&2; exit 1; }
+done < <(find addons -mindepth 2 -maxdepth 2 -name plugin.conf -type f | sort)
 # shellcheck disable=SC1091
 source addons/bbr/plugin.conf
 [[ ${PLUGIN_VERSION:-} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \

@@ -46,7 +46,7 @@ root@server:~#
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.7.4 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.7.5 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
@@ -68,7 +68,7 @@ socksctl guide
 
 只有第三步的 `git clone` 明确失败时才使用：
 
-1. 在 Windows 下载本项目 `v1.7.4` 源码压缩包并解压。
+1. 在 Windows 下载本项目 `v1.7.5` 源码压缩包并解压。
 2. 使用 Xshell 远程文件管理器或 Xftp，把整个目录上传到 `/root/socks5-toolkit`。
 3. 回到 `root@...#` 运行：
 
