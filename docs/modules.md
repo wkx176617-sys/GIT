@@ -38,6 +38,7 @@
 | `docs/macos.md` | Mac Terminal、SSH、部署、迁移和升级步骤 |
 | `docs/windows-xshell.md` | Windows新手逐步操作和粘贴防错 |
 | `docs/clients.md` | v2rayN、小火箭、比特浏览器导入和人工验收 |
+| `docs/visual-style.md` | GitHub公开界面的配色、层级、文案和图片预算 |
 | `docs/troubleshooting.md` | 故障检查、恢复边界和Codex提问模板 |
 | `docs/project-principles.md` | 宗旨、性能预算和功能准入规则 |
 | `docs/architecture.md` | 模块职责和依赖方向 |

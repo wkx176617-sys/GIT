@@ -1,132 +1,97 @@
 <div align="center">
 
-# GOST SOCKS5 新手部署工具
+![柔和奶油粉色的安全网络连接插画](assets/readme-hero.jpg)
 
-**少步骤搭建 · 中文防呆 · 轻量运行 · 可恢复复盘 · 插件化扩展**
+# softly connected · GOST SOCKS5
 
-[![稳定版本](https://img.shields.io/badge/稳定版本-v1.7.5-1677ff)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.7.5)
-[![自动检查](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml/badge.svg)](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml)
-![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%20%7C%2022.04%20%7C%2024.04-E95420)
-![GOST](https://img.shields.io/badge/GOST-3.2.6-2f81f7)
-![运行方式](https://img.shields.io/badge/管理工具-按需运行-2ea44f)
+**给第一次接触服务器的你，一条轻盈、清楚、可以回头的搭建路线。**
 
-[新手安装](#新手安装) · [日常使用](#日常使用) · [模块地图](#模块地图) · [可选插件](#可选插件) · [故障求助](#故障求助)
+[![stable v1.7.6](https://img.shields.io/badge/stable-v1.7.6-E5B8BE?style=flat-square)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.7.6)
+[![checks](https://img.shields.io/github/actions/workflow/status/wkx176617-sys/GIT/validate.yml?label=checks&style=flat-square&labelColor=F3E8E4&color=A9B8A1)](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04_·_22.04_·_24.04-C98F96?style=flat-square)](docs/tutorial.md)
+[![GOST](https://img.shields.io/badge/GOST-3.2.6-A9B8A1?style=flat-square)](https://github.com/go-gost/gost/releases/tag/v3.2.6)
+
+[开始搭建](#开始搭建)　·　[日常使用](#日常使用)　·　[可选插件](#可选插件)　·　[遇到问题](#遇到问题)
 
 </div>
 
-这是一个面向新手的轻量 SOCKS5 部署工具。每台 Ubuntu VPS 运行一个 GOST 节点，默认使用
-`31080/TCP`；Mac 或 Windows 只负责 SSH/Xshell 和浏览器，不运行本项目后台服务。
+> 当前推荐稳定版本：`v1.7.6`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
 
-> 当前推荐稳定版本：`v1.7.5`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
+每台 Ubuntu VPS 运行一个轻量 GOST SOCKS5 节点，默认使用 `31080/TCP`。Mac 或 Windows
+只负责连接服务器和使用浏览器，不需要运行本项目后台服务。
 
-## 项目宗旨
+## 写在开始之前
 
 > 让第一次接触服务器的人，也能用尽量少的步骤安全搭建和维护 SOCKS5；让功能可以扩展，
 > 但不让核心变成笨重的全权调度平台；让问题有记录、有回退、有复盘，项目因此持续变好。
 
-| 原则 | 落地方式 |
-|---|---|
-| 新手防呆 | 中文菜单、参数拦截、危险操作二次确认 |
-| 单一主路径 | 当前页面只给一个推荐下一步，可选分支在首次成功后出现 |
-| 稳定克制 | 全面检测；只有明确白名单故障才自动维修 |
-| 模块化 | 核心、诊断、安全、教程和插件边界清晰 |
-| 轻量高效 | 正常运行只有 GOST 常驻，其余工具按需调用 |
-| 简便实用 | 一个推荐安装入口，日常只需记住 `socksctl guide` |
-| 持续复盘 | 事件编号、脱敏报告、健康快照和独立版本说明 |
+`一条主线`　`中文防呆`　`轻量运行`　`谨慎维修`　`可恢复复盘`　`插件化扩展`
 
-仓库修改必须遵守[开发规则](AGENTS.md)；完整依据见
-[项目宗旨与开发边界](docs/project-principles.md)和[轻量模块架构](docs/architecture.md)。
+## 开始搭建
 
-## 新手安装
+第一次使用时，只选择与你电脑对应的一条路线。
 
-### Windows + Xshell
+| 我使用的电脑 | 从这里开始 | 你会完成什么 |
+|---|---|---|
+| Mac | [macOS 部署指南](docs/macos.md) | Terminal、SSH、部署和下一步 |
+| Windows | [Windows + Xshell 教程](docs/windows-xshell.md) | Xshell 登录、安装和下一步 |
+| 还不知道选什么 | [第一次搭建总路线](docs/tutorial.md) | 从 VPS 准备到客户端验收 |
+
+<details>
+<summary><strong>Windows + Xshell 三行安装命令</strong></summary>
 
 SSH 登录 Ubuntu VPS，看到 `root@...#` 后，每次只复制一行：
 
 ```bash
 apt-get update && apt-get install -y git ca-certificates
-git clone --branch v1.7.5 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.7.6 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
-不要复制终端前面的 `root@...#`，不要把中文说明粘贴进窗口。完整界面步骤见
-[Windows + Xshell 教程](docs/windows-xshell.md)。
+</details>
 
-### macOS
-
-在本项目目录执行：
+<details>
+<summary><strong>macOS 已下载项目时的部署命令</strong></summary>
 
 ```bash
 ./deploy.sh root@你的VPS公网IP --port 31080
 ```
 
-Mac 专用步骤见[macOS 部署指南](docs/macos.md)，不会再跳转到跨平台完整流程。
+</details>
+
+安装成功后，进入[客户端导入与网络验收](docs/clients.md)，可填写比特浏览器，也可复制
+v2rayN、小火箭链接或显示二维码。
 
 ## 日常使用
 
-以后无论使用 Mac 还是 Windows，SSH 登录对应 VPS 后只需记住：
+以后无论使用 Mac 还是 Windows，SSH 登录对应 VPS 后只记住：
 
 ```bash
 socksctl guide
 ```
 
-中文菜单可以完成只读检查、记录问题、生成报告、查看快照和受控恢复。无效输入不会修改
-配置。熟悉后可直接使用：
+它会打开中文菜单。熟悉后可以按需使用：
 
-```bash
-socksctl info                # IP、端口、用户名和服务状态；密码打码
-socksctl doctor --no-record  # 严格只读诊断
-socksctl export              # 导出 v2rayN / Shadowrocket 信息（包含密码）
-socksctl report              # 生成可交给 Codex 的脱敏报告
-```
-
-## 模块地图
-
-| 模块 | 入口 | 运行方式 | 作用 |
-|---|---|---|---|
-| 代理核心 | GOST `3.2.6` | 唯一常驻业务进程 | SOCKS5 TCP 转发和认证 |
-| 安装部署 | `deploy.sh`、`xshell-install.sh` | 按需 | 质检、安装、升级和事务回退 |
-| 统一管理 | `socksctl` | 按需 | 中文菜单和稳定命令入口 |
-| 健康诊断 | `socks-doctor` | 按需、可严格只读 | 服务、端口、资源和有限外部检测 |
-| 安全恢复 | `socks-safety` | 按需 | 事件、快照校验、熔断和恢复 |
-| 可选插件 | [插件中心](addons/README.md) | 用户明确启用 | 独立登记、安装、检查、恢复和卸载 |
-| 教程与版本 | `docs/` | 不运行 | 新手步骤、故障复盘和版本档案 |
-
-详细文件、依赖和扩展规则见[模块索引](docs/modules.md)。
-
-```text
-比特浏览器 → VPS公网IP:31080 → GOST SOCKS5 → 互联网
-```
-
-协议能力为 SOCKS5 TCP；当前未启用 UDP 转发。项目不安装 Web 面板、数据库、Docker、cron
-或 systemd timer，也不额外开放管理端口。
+| 想做什么 | 命令 |
+|---|---|
+| 查看节点，隐藏密码 | `socksctl info` |
+| 严格只读诊断 | `socksctl doctor --no-record` |
+| 复制客户端链接 | `socksctl export` |
+| 生成脱敏报告 | `socksctl report` |
 
 ## 可选插件
 
-> 首次搭建不需要插件。先完成 SOCKS5 安装和客户端验收；没有明确问题时保持不安装。
+> 首次搭建不需要插件。没有明确问题时，保持不安装就是推荐选择。
 
-| 插件 | 状态 | 用途 | 查看 |
+| 当前插件 | 适合 | 不负责 | 入口 |
 |---|---|---|---|
-| BBR + FQ `1.1.0` | 独立可选 | 改善部分高延迟或丢包 TCP 线路 | [插件说明](addons/bbr/README.md) |
+| BBR + FQ `1.1.0` | 部分高延迟、丢包 TCP 线路 | IP质量、DNS、WebRTC、加密、平台风控 | [查看插件](addons/bbr/README.md) |
 
-统一入口见[可选插件中心](addons/README.md)。插件不会自动修改 GOST、节点 IP、端口或凭据，
-也不能改善 IP 质量、DNS、WebRTC、加密或平台风控。
+所有扩展统一登记在[可选插件中心](addons/README.md)。插件不会被主程序自动安装或启用。
 
-## 安全与恢复
+## 遇到问题
 
-- 默认生成独立用户名和强密码，节点名称使用 VPS 公网 IP。
-- 安装器固定 GOST 版本并验证 SHA-256，不使用远程 `curl | bash`。
-- 目标端口被未知程序占用时停止，不擅自删除旧服务。
-- 安装、升级和密码轮换修改前保存事务快照，验收失败恢复修改前状态。
-- `heal` 只处理原因明确的配置白名单故障；外部线路、VPN、安全组和未知故障只记录。
-- 相同故障自动恢复一次后进入30分钟熔断，避免新旧状态反复切换。
-- 标准 SOCKS5 不是加密隧道，应在云安全组把 `31080/TCP` 限制为固定工作出口IP `/32`。
-
-不要把 `socksctl credentials`、`socksctl export`、二维码、SSH 密码、私钥或 Token 上传 GitHub。
-
-## 故障求助
-
-出现问题时依次运行：
+先不要重装、删服务或反复粘贴安装命令。依次运行：
 
 ```bash
 socksctl note
@@ -134,35 +99,51 @@ socksctl doctor --no-record
 socksctl report
 ```
 
-把事件编号、实际现象和人工检查后的脱敏报告提供给 Codex。完整操作和提问模板见
-[手动检查、维修与 Codex 求助教程](docs/troubleshooting.md)。
+把事件编号、实际现象和人工检查后的脱敏报告提供给 Codex。完整步骤见
+[故障处理教程](docs/troubleshooting.md)。不要公开密码、Token、私钥、二维码或导入链接。
 
-公开提交 GitHub Issue 前必须删除密码、Token、私钥、二维码、客户资料和导入链接。Bug 与
-功能建议会由结构化模板引导，避免遗漏版本、时间和复现步骤。
+## 轻量，但不是简单粗暴
 
-## 文档导航
+```text
+比特浏览器 / 客户端 → VPS公网IP:31080 → GOST SOCKS5 → 互联网
+```
 
-| 我想做什么 | 查看 |
-|---|---|
-| 第一次搭建，不知道从哪里开始 | [第一次搭建总路线](docs/tutorial.md) |
-| 使用 macOS Terminal | [macOS 部署指南](docs/macos.md) |
-| 使用 Windows + Xshell | [Windows + Xshell 教程](docs/windows-xshell.md) |
-| 导入 v2rayN、小火箭或比特浏览器 | [客户端导入与网络验收](docs/clients.md) |
-| 检查网络隔离 | [网络检测网站公告](docs/announcements/network-check-links.md) |
-| 手动检查或向 Codex 求助 | [故障处理教程](docs/troubleshooting.md) |
-| 查看或选择可选插件 | [可选插件中心](addons/README.md) |
-| 理解项目模块 | [模块索引](docs/modules.md) |
-| 修改或扩展项目 | [开发规则](AGENTS.md) · [项目宗旨](docs/project-principles.md) · [轻量架构](docs/architecture.md) |
-| 查看版本变化 | [更新记录](CHANGELOG.md) · [各版本说明](docs/releases/) |
-| 发布新版本 | [版本规则](docs/version-policy.md) · [发布清单](RELEASING.md) |
+- 正常运行只有 GOST 作为业务常驻进程。
+- 不安装 Web 面板、数据库、Docker、cron、systemd timer 或额外管理端口。
+- 安装和升级先保存快照；只有原因明确的白名单故障才允许自动维修。
+- 端口被未知程序占用时停止，不擅自删除旧服务。
+- SOCKS5 是 TCP 代理，不是加密隧道；安全组应把 `31080/TCP` 限制为工作出口 IP `/32`。
 
-## 支持范围与定位
+<details>
+<summary><strong>查看项目模块</strong></summary>
 
-- Ubuntu 20.04、22.04、24.04，支持 `amd64` 和 `arm64`。
-- 推荐新节点使用 Ubuntu 24.04 LTS `amd64`；现有22.04节点无需为本工具重装。
-- 定位为单台 VPS 的轻量 SOCKS5 工具，不提供集中节点控制平台。
-- 客户端 IPv4、IPv6、DNS、WebRTC 和时区必须在真实比特浏览器中人工验收。
-- 功能增加不等于 `2.0`；只有不兼容的重大架构变化才升级主版本。
+| 模块 | 入口 | 运行方式 |
+|---|---|---|
+| 代理核心 | GOST `3.2.6` | 唯一常驻业务进程 |
+| 安装部署 | `deploy.sh`、`xshell-install.sh` | 按需 |
+| 统一管理 | `socksctl` | 按需 |
+| 健康诊断 | `socks-doctor` | 按需、可严格只读 |
+| 安全恢复 | `socks-safety` | 按需 |
+| 可选插件 | [插件中心](addons/README.md) | 用户明确启用 |
 
-本项目的衡量标准不是“功能最多”，而是：**新手更少出错，稳定节点不被打扰，问题更容易
-复盘，新增能力不增加无谓的后台负担。**
+更完整的职责和扩展边界见[模块索引](docs/modules.md)。
+
+</details>
+
+<details>
+<summary><strong>维护与版本资料</strong></summary>
+
+- [网络检测网站公告](docs/announcements/network-check-links.md)
+- [更新记录](CHANGELOG.md) · [各版本说明](docs/releases/)
+- [开发规则](AGENTS.md) · [项目宗旨](docs/project-principles.md) · [轻量架构](docs/architecture.md) · [视觉规范](docs/visual-style.md)
+- [版本规则](docs/version-policy.md) · [发布清单](RELEASING.md)
+
+</details>
+
+<div align="center">
+
+**不追求功能最多，只希望新手更少出错，稳定节点不被打扰。**
+
+Ubuntu `20.04 / 22.04 / 24.04` · `amd64 / arm64` · SOCKS5 TCP
+
+</div>

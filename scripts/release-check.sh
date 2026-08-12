@@ -16,7 +16,7 @@ release_file="docs/releases/$tag.md"
 [[ -f $release_file ]] || { printf '缺少版本说明：%s\n' "$release_file" >&2; exit 1; }
 [[ -f AGENTS.md && -f docs/project-principles.md && -f docs/architecture.md \
    && -f docs/modules.md && -f docs/macos.md && -f docs/windows-xshell.md \
-   && -f docs/clients.md ]] \
+   && -f docs/clients.md && -f docs/visual-style.md ]] \
   || { printf '缺少仓库规则、架构、模块索引、平台教程或客户端教程\n' >&2; exit 1; }
 [[ -f .github/ISSUE_TEMPLATE/bug_report.yml \
    && -f .github/ISSUE_TEMPLATE/feature_request.yml \
@@ -52,6 +52,13 @@ grep -Fq '单一主路径' AGENTS.md \
   || { printf '仓库规则缺少新手单一主路径边界\n' >&2; exit 1; }
 grep -Fq '[开发规则](AGENTS.md)' README.md \
   || { printf 'README 未提供仓库开发规则入口\n' >&2; exit 1; }
+[[ -f assets/readme-hero.jpg ]] || { printf 'README 缺少本地视觉横幅\n' >&2; exit 1; }
+grep -Fq '![柔和奶油粉色的安全网络连接插画](assets/readme-hero.jpg)' README.md \
+  || { printf 'README 横幅缺少预期引用或替代文字\n' >&2; exit 1; }
+hero_bytes=$(wc -c <assets/readme-hero.jpg)
+(( hero_bytes <= 300000 )) || { printf 'README 横幅超过300KB预算\n' >&2; exit 1; }
+grep -Fq 'docs/visual-style.md' AGENTS.md \
+  || { printf '仓库规则未引用视觉风格约束\n' >&2; exit 1; }
 grep -Fq '正常工作时只有 GOST 常驻' docs/architecture.md \
   || { printf '架构说明缺少按需运行边界\n' >&2; exit 1; }
 grep -Fq '## 修改路由' docs/modules.md \
