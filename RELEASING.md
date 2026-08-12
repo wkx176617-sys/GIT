@@ -1,6 +1,6 @@
 # 发布新版本
 
-本文件是维护者发布清单。详细原则见[项目宗旨](docs/project-principles.md)、
+本文件是维护者发布清单。仓库级约束见[开发规则](AGENTS.md)，详细原则见[项目宗旨](docs/project-principles.md)、
 [轻量模块架构](docs/architecture.md)和[版本维护规则](docs/version-policy.md)。
 
 1. 确定新版本号，并更新 `VERSION`。

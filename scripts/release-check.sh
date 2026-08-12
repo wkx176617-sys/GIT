@@ -14,8 +14,8 @@ tag="v$version"
 release_file="docs/releases/$tag.md"
 
 [[ -f $release_file ]] || { printf '缺少版本说明：%s\n' "$release_file" >&2; exit 1; }
-[[ -f docs/project-principles.md && -f docs/architecture.md && -f docs/modules.md ]] \
-  || { printf '缺少项目宗旨、轻量架构或模块索引\n' >&2; exit 1; }
+[[ -f AGENTS.md && -f docs/project-principles.md && -f docs/architecture.md && -f docs/modules.md ]] \
+  || { printf '缺少仓库规则、项目宗旨、轻量架构或模块索引\n' >&2; exit 1; }
 [[ -f .github/ISSUE_TEMPLATE/bug_report.yml \
    && -f .github/ISSUE_TEMPLATE/feature_request.yml \
    && -f .github/PULL_REQUEST_TEMPLATE.md ]] \
@@ -33,6 +33,14 @@ grep -Fq '新功能默认先评估能否作为插件' docs/project-principles.md
   || { printf '项目宗旨缺少插件优先规则\n' >&2; exit 1; }
 grep -Fq '功能变多不等于 2.0' docs/project-principles.md \
   || { printf '项目宗旨缺少主版本准入规则\n' >&2; exit 1; }
+grep -Fq 'docs/project-principles.md` 是项目宗旨、性能预算和功能准入条件的唯一完整来源' AGENTS.md \
+  || { printf '仓库规则未指定项目宗旨的唯一完整来源\n' >&2; exit 1; }
+grep -Fq '未知即停止' AGENTS.md \
+  || { printf '仓库规则缺少未知故障停止边界\n' >&2; exit 1; }
+grep -Fq '正常运行只允许 GOST 作为业务常驻进程' AGENTS.md \
+  || { printf '仓库规则缺少常驻进程边界\n' >&2; exit 1; }
+grep -Fq '[开发规则](AGENTS.md)' README.md \
+  || { printf 'README 未提供仓库开发规则入口\n' >&2; exit 1; }
 grep -Fq '正常工作时只有 GOST 常驻' docs/architecture.md \
   || { printf '架构说明缺少按需运行边界\n' >&2; exit 1; }
 grep -Fq '## 修改路由' docs/modules.md \

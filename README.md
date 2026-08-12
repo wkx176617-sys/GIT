@@ -4,7 +4,7 @@
 
 **少步骤搭建 · 中文防呆 · 轻量运行 · 可恢复复盘 · 插件化扩展**
 
-[![稳定版本](https://img.shields.io/badge/稳定版本-v1.7.1-1677ff)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.7.1)
+[![稳定版本](https://img.shields.io/badge/稳定版本-v1.7.2-1677ff)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.7.2)
 [![自动检查](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml/badge.svg)](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%20%7C%2022.04%20%7C%2024.04-E95420)
 ![GOST](https://img.shields.io/badge/GOST-3.2.6-2f81f7)
@@ -17,7 +17,7 @@
 这是一个面向新手的轻量 SOCKS5 部署工具。每台 Ubuntu VPS 运行一个 GOST 节点，默认使用
 `31080/TCP`；Mac 或 Windows 只负责 SSH/Xshell 和浏览器，不运行本项目后台服务。
 
-> 当前推荐稳定版本：`v1.7.1`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
+> 当前推荐稳定版本：`v1.7.2`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
 
 ## 项目宗旨
 
@@ -33,7 +33,8 @@
 | 简便实用 | 一个推荐安装入口，日常只需记住 `socksctl guide` |
 | 持续复盘 | 事件编号、脱敏报告、健康快照和独立版本说明 |
 
-完整规则见[项目宗旨与开发边界](docs/project-principles.md)和[轻量模块架构](docs/architecture.md)。
+仓库修改必须遵守[开发规则](AGENTS.md)；完整依据见
+[项目宗旨与开发边界](docs/project-principles.md)和[轻量模块架构](docs/architecture.md)。
 
 ## 新手安装
 
@@ -43,7 +44,7 @@ SSH 登录 Ubuntu VPS，看到 `root@...#` 后，每次只复制一行：
 
 ```bash
 apt-get update && apt-get install -y git ca-certificates
-git clone --branch v1.7.1 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.7.2 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
@@ -136,7 +137,7 @@ socksctl report
 | 检查网络隔离 | [网络检测网站公告](docs/announcements/network-check-links.md) |
 | 手动检查或向 Codex 求助 | [故障处理教程](docs/troubleshooting.md) |
 | 理解项目模块 | [模块索引](docs/modules.md) |
-| 理解开发边界 | [项目宗旨](docs/project-principles.md) · [轻量架构](docs/architecture.md) |
+| 修改或扩展项目 | [开发规则](AGENTS.md) · [项目宗旨](docs/project-principles.md) · [轻量架构](docs/architecture.md) |
 | 查看版本变化 | [更新记录](CHANGELOG.md) · [各版本说明](docs/releases/) |
 | 发布新版本 | [版本规则](docs/version-policy.md) · [发布清单](RELEASING.md) |
 

@@ -31,6 +31,7 @@
 
 | 目录或文件 | 用途 |
 |---|---|
+| `AGENTS.md` | 整个仓库必须遵守的开发规则和决策顺序 |
 | `README.md` | GitHub首页，只保留定位、快速入口、模块地图和导航 |
 | `docs/tutorial.md` | 完整搭建、客户端配置和人工验收 |
 | `docs/windows-xshell.md` | Windows新手逐步操作和粘贴防错 |
