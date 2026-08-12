@@ -33,7 +33,7 @@
 |---|---|
 | `AGENTS.md` | 整个仓库必须遵守的开发规则和决策顺序 |
 | `README.md` | GitHub首页，只保留定位、快速入口、模块地图和导航 |
-| `docs/tutorial.md` | 跨平台完整搭建流程和专题文档入口 |
+| `docs/tutorial.md` | 第一次搭建的单一总路线和专题入口，不复制专题细节 |
 | `docs/macos.md` | Mac Terminal、SSH、部署、迁移和升级步骤 |
 | `docs/windows-xshell.md` | Windows新手逐步操作和粘贴防错 |
 | `docs/clients.md` | v2rayN、小火箭、比特浏览器导入和人工验收 |

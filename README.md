@@ -4,7 +4,7 @@
 
 **少步骤搭建 · 中文防呆 · 轻量运行 · 可恢复复盘 · 插件化扩展**
 
-[![稳定版本](https://img.shields.io/badge/稳定版本-v1.7.3-1677ff)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.7.3)
+[![稳定版本](https://img.shields.io/badge/稳定版本-v1.7.4-1677ff)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.7.4)
 [![自动检查](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml/badge.svg)](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%20%7C%2022.04%20%7C%2024.04-E95420)
 ![GOST](https://img.shields.io/badge/GOST-3.2.6-2f81f7)
@@ -17,7 +17,7 @@
 这是一个面向新手的轻量 SOCKS5 部署工具。每台 Ubuntu VPS 运行一个 GOST 节点，默认使用
 `31080/TCP`；Mac 或 Windows 只负责 SSH/Xshell 和浏览器，不运行本项目后台服务。
 
-> 当前推荐稳定版本：`v1.7.3`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
+> 当前推荐稳定版本：`v1.7.4`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
 
 ## 项目宗旨
 
@@ -27,6 +27,7 @@
 | 原则 | 落地方式 |
 |---|---|
 | 新手防呆 | 中文菜单、参数拦截、危险操作二次确认 |
+| 单一主路径 | 当前页面只给一个推荐下一步，可选分支在首次成功后出现 |
 | 稳定克制 | 全面检测；只有明确白名单故障才自动维修 |
 | 模块化 | 核心、诊断、安全、教程和插件边界清晰 |
 | 轻量高效 | 正常运行只有 GOST 常驻，其余工具按需调用 |
@@ -44,7 +45,7 @@ SSH 登录 Ubuntu VPS，看到 `root@...#` 后，每次只复制一行：
 
 ```bash
 apt-get update && apt-get install -y git ca-certificates
-git clone --branch v1.7.3 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.7.4 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
 bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
@@ -132,7 +133,7 @@ socksctl report
 
 | 我想做什么 | 查看 |
 |---|---|
-| 第一次完整搭建 | [完整搭建教程](docs/tutorial.md) |
+| 第一次搭建，不知道从哪里开始 | [第一次搭建总路线](docs/tutorial.md) |
 | 使用 macOS Terminal | [macOS 部署指南](docs/macos.md) |
 | 使用 Windows + Xshell | [Windows + Xshell 教程](docs/windows-xshell.md) |
 | 导入 v2rayN、小火箭或比特浏览器 | [客户端导入与网络验收](docs/clients.md) |

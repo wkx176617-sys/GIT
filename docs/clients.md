@@ -113,3 +113,5 @@ socksctl check
 - 不截图发群或粘贴到公开 Issue；
 - 不把完整输出直接提供给 Codex；
 - 怀疑泄露时运行 `socksctl rotate`，并立即更新所有客户端。
+
+验收失败时不要切换其他搭建分支，下一步只进入[故障处理教程](troubleshooting.md)。

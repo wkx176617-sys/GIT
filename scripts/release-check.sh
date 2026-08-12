@@ -24,8 +24,7 @@ release_file="docs/releases/$tag.md"
   || { printf '缺少GitHub故障、建议或贡献模板\n' >&2; exit 1; }
 grep -Fq "## $tag " CHANGELOG.md || { printf 'CHANGELOG 缺少 %s\n' "$tag" >&2; exit 1; }
 grep -Fq "当前推荐稳定版本：\`$tag\`" README.md || { printf 'README 未推荐 %s\n' "$tag" >&2; exit 1; }
-grep -Fq "工具：\`$tag\`" docs/tutorial.md || { printf '完整教程未推荐 %s\n' "$tag" >&2; exit 1; }
-grep -Fq -- "--branch $tag" docs/tutorial.md || { printf '完整教程下载命令未固定 %s\n' "$tag" >&2; exit 1; }
+grep -Fq "工具：\`$tag\`" docs/tutorial.md || { printf '第一次搭建总路线未推荐 %s\n' "$tag" >&2; exit 1; }
 grep -Fq -- "--branch $tag" docs/windows-xshell.md || { printf 'Xshell 教程下载命令未固定 %s\n' "$tag" >&2; exit 1; }
 grep -Fq -- "--branch $tag" docs/macos.md || { printf 'macOS 教程下载命令未固定 %s\n' "$tag" >&2; exit 1; }
 grep -Fq '[macOS 部署指南](docs/macos.md)' README.md || { printf 'README 未提供macOS专用入口\n' >&2; exit 1; }
@@ -41,12 +40,16 @@ grep -Fq '新功能默认先评估能否作为插件' docs/project-principles.md
   || { printf '项目宗旨缺少插件优先规则\n' >&2; exit 1; }
 grep -Fq '功能变多不等于 2.0' docs/project-principles.md \
   || { printf '项目宗旨缺少主版本准入规则\n' >&2; exit 1; }
+grep -Fq '单一主路径，按需展开' docs/project-principles.md \
+  || { printf '项目宗旨缺少单一主路径规则\n' >&2; exit 1; }
 grep -Fq 'docs/project-principles.md` 是项目宗旨、性能预算和功能准入条件的唯一完整来源' AGENTS.md \
   || { printf '仓库规则未指定项目宗旨的唯一完整来源\n' >&2; exit 1; }
 grep -Fq '未知即停止' AGENTS.md \
   || { printf '仓库规则缺少未知故障停止边界\n' >&2; exit 1; }
 grep -Fq '正常运行只允许 GOST 作为业务常驻进程' AGENTS.md \
   || { printf '仓库规则缺少常驻进程边界\n' >&2; exit 1; }
+grep -Fq '单一主路径' AGENTS.md \
+  || { printf '仓库规则缺少新手单一主路径边界\n' >&2; exit 1; }
 grep -Fq '[开发规则](AGENTS.md)' README.md \
   || { printf 'README 未提供仓库开发规则入口\n' >&2; exit 1; }
 grep -Fq '正常工作时只有 GOST 常驻' docs/architecture.md \
@@ -83,6 +86,26 @@ while IFS= read -r existing_tag; do
 done < <(git tag --list 'v*' --sort=version:refname)
 
 bash tests/syntax.sh
+
+for route_file in docs/tutorial.md docs/macos.md docs/windows-xshell.md; do
+  route_lines=$(wc -l <"$route_file")
+  (( route_lines <= 140 )) || {
+    printf '新手路线超过140行预算：%s（%s行）\n' "$route_file" "$route_lines" >&2
+    exit 1
+  }
+done
+if rg -n 'socksctl[[:space:]]+qr|bbrctl[[:space:]]+(enable|repair|restore)' \
+  docs/tutorial.md docs/macos.md docs/windows-xshell.md; then
+  printf '新手路线重复了客户端二维码或插件操作，应链接唯一专题\n' >&2
+  exit 1
+fi
+if rg -n 'git[[:space:]]+clone|xshell-install\.sh|\./deploy\.sh' docs/tutorial.md; then
+  printf '第一次搭建总路线重复了平台安装命令，应只链接平台专题\n' >&2
+  exit 1
+fi
+grep -Fq '[客户端导入与网络验收](clients.md)' docs/macos.md \
+  && grep -Fq '[客户端导入与网络验收](clients.md)' docs/windows-xshell.md \
+  || { printf '平台教程没有统一进入客户端专题\n' >&2; exit 1; }
 
 link_failed=false
 while IFS= read -r markdown_file; do

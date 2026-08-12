@@ -1,199 +1,111 @@
 # Windows + Xshell 部署指南
 
-本指南适用于在 Windows 10/11 上使用 Xshell 8，通过 SSH 管理 Ubuntu VPS。Xshell 只是远程终端；安装脚本实际运行在 Linux VPS 上，因此 Windows 不需要安装 Bash、Go、GOST 或 Docker。
+本页只负责 Windows 10/11 使用 Xshell 8 连接 Ubuntu VPS 并完成安装。客户端导入、网络验收、
+故障维修和 BBR 分别由专题教程负责。
 
-## 准备信息
+## 首次安装主线
 
-- VPS 公网 IP
-- SSH 端口，通常为 `22`
-- SSH 用户名，通常为 `root`
-- SSH 密码或私钥
-- 云安全组允许你的工作出口 IP 访问 `22/TCP`
+```text
+新建SSH会话 → 登录VPS → 下载固定版本 → 运行安装 → 进入客户端教程
+```
 
-## 方式一：在 Xshell 中从 GitHub 下载（推荐）
+只按以下四步操作。首次安装成功前不要进入后面的可选情况。
 
-### 1. 建立 SSH 会话
+## 第一步：准备连接信息
 
-在 Xshell 新建会话：
+- VPS 公网 IP；
+- SSH 端口，通常为 `22`；
+- SSH 用户名，通常为 `root`；
+- SSH 密码或私钥；
+- 云安全组允许当前工作出口 IP `/32` 访问 `22/TCP` 和 `31080/TCP`。
+
+## 第二步：在 Xshell 登录 VPS
+
+新建会话并填写：
 
 ```text
 协议：SSH
-主机：VPS 公网 IP
+主机：VPS公网IP
 端口：22
 用户名：root
 ```
 
-登录成功后，命令提示符应类似：
+登录成功后必须看到类似：
 
 ```text
 root@server:~#
 ```
 
-只复制代码框中的命令，不要复制前面的 `root@server:~#`，也不要复制序号、中文说明或网页按钮
-文字。每次只粘贴一行，看到上一行执行完成并重新出现 `root@...#` 后，再粘贴下一行。下面的
-安装命令使用绝对路径，所以不需要自己判断当前位于哪个文件夹。
+如果看到 `Xshell:\>`，说明仍在 Windows 本地提示符，不要运行 Linux 命令。每次只复制一个
+代码框中的一行，等重新出现 `root@...#` 后再复制下一行；不要复制提示符、序号或中文说明。
 
-如果看到的是 `Xshell:\>`，说明仍在 Windows 本地提示符，不要在那里运行 Linux 安装命令。
+## 第三步：下载并安装
 
-### 2. 下载固定版本
-
-在服务器提示符中逐行执行：
+在 `root@...#` 后逐行运行：
 
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.7.3 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+git clone --branch v1.7.4 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
+bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
-使用固定版本标签可以避免后续代码变化影响已记录的操作流程。
+程序会先做只读质检，再安装固定版本 GOST。节点名称自动使用 VPS 公网 IP。安装成功后立即
+把端口、用户名和密码保存到密码管理器，不要截图发群或上传 GitHub。
 
-### 3. 安装节点
+## 第四步：进入客户端教程
+
+服务器端安装完成后，不要继续寻找其他搭建分支。直接进入
+[客户端导入与网络验收](clients.md)，选择比特浏览器、v2rayN 或小火箭中的一个小节。
+
+首次搭建到这里结束。日常再次登录服务器时只需运行：
+
+```bash
+socksctl guide
+```
+
+## 可选情况：服务器无法访问 GitHub
+
+只有第三步的 `git clone` 明确失败时才使用：
+
+1. 在 Windows 下载本项目 `v1.7.4` 源码压缩包并解压。
+2. 使用 Xshell 远程文件管理器或 Xftp，把整个目录上传到 `/root/socks5-toolkit`。
+3. 回到 `root@...#` 运行：
 
 ```bash
 bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
-节点名称会自动使用 VPS 公网 IP。安装结束会显示服务器、端口、用户名和密码。立即保存到密码管理器，不要截图发到聊天群，也不要写进 Git。
+## 可选情况：旧节点已经占用端口
 
-## 方式二：使用 Xshell/Xftp 上传
-
-如果服务器无法访问 GitHub：
-
-1. 在 Windows 下载本项目 `v1.7.3` 源码压缩包并解压。
-2. 在已连接的 Xshell 中选择“窗口 → 新建文件传输”，或者打开远程文件管理器。
-3. 将整个项目文件夹上传到 `/root/socks5-toolkit`。
-4. 回到 Xshell 执行：
+标准安装会先质检。只有报告明确显示“可迁移：旧 sing-box SOCKS5”时才运行：
 
 ```bash
-cd /root/socks5-toolkit
-bash xshell-install.sh --port 31080
+bash /root/socks5-toolkit/xshell-install.sh --port 31080 --overwrite
 ```
 
-安装入口会先进行只读质检。如果旧 sing-box 已经占用 `31080` 且报告“可迁移”，确认旧配置
-备份说明后运行：
+它会备份并保留可识别的旧凭据。检测到 x-ui、Xray、v2ray 或未知程序时会停止；不要强行
+删除占用者。原因不清楚时进入[故障处理教程](troubleshooting.md)。
 
-```bash
-bash xshell-install.sh --port 31080 --overwrite
-```
+## 可选情况：升级稳定版本
 
-它会保留旧 SOCKS5 账号密码。若报告 x-ui、Xray、v2ray 或未知程序占用端口，不要强行
-覆写，先确认旧服务用途。
-
-Xshell 8 官方支持远程文件管理器，并可与 Xftp 通过 SFTP 上传文件。
-
-## 可选 BBR 插件
-
-BBR 插件不会随 SOCKS5 自动启用。需要时在 Xshell 中单独执行：
-
-```bash
-cd /root/socks5-toolkit/addons/bbr
-bash install.sh
-bbrctl check
-bbrctl health
-bbrctl enable
-```
-
-恢复原设置运行 `bbrctl restore`。完整说明见项目中的 `addons/bbr/README.md`。
-
-## Xshell 故障诊断与恢复
-
-```bash
-socksctl doctor
-socksctl incidents
-socksctl heal
-socksctl snapshots
-```
-
-`doctor` 不显示密码；`incidents` 可查询带编号的历史问题；`heal` 只在服务器本地确定性故障
-时恢复最后可用状态。若 Xshell 本身无法连接，应先检查 VPN 出口 IP、SSH 安全组和服务器状态，
-此时服务器内命令无法运行。
-新版本出现未知兼容问题时，先运行 `socksctl snapshots`，确认存在 `previous-good` 后执行
-`socksctl recover previous`，并按提示输入 `RESTORE`。
-
-## 云安全组
-
-安装完成后只保留：
-
-```text
-22/TCP      来源：固定工作出口 IP/32
-31080/TCP   来源：固定工作出口 IP/32
-```
-
-如果工作时必须常开 VPN，来源应填写 VPN 的固定出口 IP。VPN 换节点或出口变化后，需要同步修改这两条规则。
-
-## 比特浏览器
-
-```text
-代理类型：SOCKS5
-主机：VPS 公网 IP
-端口：31080
-用户名：安装结果中的用户名
-密码：安装结果中的密码
-```
-
-检查代理后，再验证公网 IP、WebRTC 和 DNS。不要在检测通过前登录业务账号。
-
-## Xshell 日常维护
-
-每次通过 Xshell 登录服务器后，可以执行：
-
-```bash
-socksctl status
-socksctl check
-socksctl info
-socksctl export
-socksctl logs
-socksctl restart
-```
-
-只有需要查看完整密码时才执行：
-
-```bash
-socksctl credentials
-```
-
-导入 v2rayN 时运行：
-
-```bash
-socksctl export v2rayn
-```
-
-复制输出的完整 `socks://...` 一行，在 v2rayN 中选择“从剪贴板导入批量 URL”。建议使用
-[v2rayN 官方当前稳定版](https://github.com/2dust/v2rayN/releases)。导入 Shadowrocket 时运行
-`socksctl qr shadowrocket`，再用手机扫码。以上链接和二维码包含完整密码，不要发给他人。
-不同客户端的链接、二维码、手工填写和验收步骤统一见
-[客户端导入与网络验收](clients.md)。
-
-## 更新项目
-
-第一版部署完成后不要直接跟随 `main`。需要升级时，先查看新版本说明，再执行：
+阅读对应版本说明后，在服务器逐行运行：
 
 ```bash
 cd /root/socks5-toolkit
 git fetch --tags
 git switch --detach 新版本标签
-bash xshell-install.sh --port 31080
+bash /root/socks5-toolkit/xshell-install.sh --port 31080
 ```
 
-重复安装会保留现有节点名称、端口、用户名和密码。
+不要部署 `main`，不要使用 `git reset --hard`。重复安装会保留现有节点参数，健康且参数相同
+时会安全跳过不必要的覆写。
 
-## 常见问题
+## 连接问题
 
-### `git: command not found`
+- 无法连接 `22`：检查 VPS 是否开机、IP、VPN 出口和云安全组。
+- `git: command not found`：重新执行 `apt-get install -y git ca-certificates`。
+- Xshell 断线：重新连接，确认看到 `root@...#` 后再运行服务器命令。
+- 协议安装后异常：不要重复粘贴安装命令，进入[故障处理教程](troubleshooting.md)。
 
-```bash
-apt-get update
-apt-get install -y git ca-certificates
-```
-
-### `TCP 端口 31080 已被其他程序占用`
-
-```bash
-ss -lntp | grep :31080
-```
-
-不要直接删除程序或重装系统；先确认占用端口的是 sing-box、x-ui、Xray 还是其他服务。
-
-### Xshell 断线后命令找不到
-
-重新连接服务器，确认提示符是 `root@server:~#`，再执行 Linux 命令。`Xshell:\>` 和 Windows PowerShell 都不是 VPS 终端。
+下一步只有一个：[客户端导入与网络验收](clients.md)。

@@ -1,296 +1,108 @@
-# SOCKS5 完整搭建教程
+# SOCKS5 第一次搭建总路线
 
-## 推荐版本
+本页只负责告诉新手“现在做什么、下一步去哪”。Mac、Windows、客户端、故障和插件细节各自
+只有一个专题来源，不在这里重复展开。
 
-- 部署工具：`v1.7.3`（稳定版）
-- 代理核心：GOST `3.2.6`（脚本固定版本并验证 SHA-256）
-- 推荐系统：Ubuntu 24.04 LTS `amd64`；已有 Ubuntu 22.04 节点可以继续使用
-- Windows 终端：Xshell 8
-- macOS 终端：系统自带 Terminal 或 VS Code Terminal
+当前推荐工具：`v1.7.4`；GOST：`3.2.6`。新节点推荐 Ubuntu 24.04 LTS `amd64`，已有
+Ubuntu 22.04 节点无需为本工具重装。
 
-生产或长期节点只使用 Git 标签中的稳定版本，不直接使用 `main`。`main` 用于后续开发，可能包含尚未发布的修改。
-
-## 最终结构
+## 先看最终路线
 
 ```text
-比特浏览器 → VPS公网IP:31080 → GOST SOCKS5 → 互联网
+准备VPS和安全组
+       ↓
+选择 Mac 或 Windows 教程完成安装
+       ↓
+导入比特浏览器 / v2rayN / 小火箭
+       ↓
+人工验收 IP、DNS、WebRTC 和时区
+       ↓
+日常只使用 socksctl guide
 ```
 
-每台 VPS 使用同一个端口 `31080/TCP`，但必须使用不同的账号密码。节点通过名称和公网 IP 区分。
+首次搭建只沿这条主线操作。旧节点迁移、升级、回退、故障维修和 BBR 都在首次成功后按需查看。
 
-## 一、准备 VPS
+## 第一步：准备 VPS
 
-推荐配置：
+推荐最低配置：
 
 ```text
 系统：Ubuntu 24.04 LTS 64位
-CPU：1核或以上
-内存：1GB或以上
-系统盘：20GB或以上
-公网 IPv4：一个
+CPU：1核
+内存：1GB
+系统盘：20GB
+公网IPv4：1个
 ```
 
-准备好公网 IP、SSH 用户名、SSH 密码或私钥。旧服务器如果运行 x-ui、Xray、sing-box 或其他代理，先备份并检查端口：
-
-```bash
-systemctl --type=service --state=running --no-pager | grep -Ei 'x-ui|xray|v2ray|sing-box|gost' || true
-ss -lntp
-```
-
-不要在不清楚用途时直接删除旧服务。
-
-## 二、配置云安全组
-
-初次连接至少需要：
+准备好 VPS 公网 IP、SSH 用户名和密码或私钥。云安全组只添加：
 
 ```text
 22/TCP      来源：固定工作出口IP/32
 31080/TCP   来源：固定工作出口IP/32
 ```
 
-如果工作环境必须常开 VPN，来源填写 VPN 的固定出口 IP。VPN 出口变化后，需要同步更新两条规则。不要开放 `1-65535`，不要为了方便长期使用 `0.0.0.0/0`。
+如果工作环境必须常开 VPN，来源填写 VPN 的固定出口 IP。不要长期开放 `0.0.0.0/0`，也不要
+开放全部端口。
 
-## 三、从 Windows + Xshell 安装
+## 第二步：只选择一个平台
 
-详细界面步骤见 [Windows + Xshell 部署指南](windows-xshell.md)。登录 VPS 并看到 `root@server:~#` 后执行：
+- 使用 Mac：进入 [macOS 部署指南](macos.md)。
+- 使用 Windows：进入 [Windows + Xshell 部署指南](windows-xshell.md)。
 
-```bash
-apt-get update
-apt-get install -y git ca-certificates
-git clone --branch v1.7.3 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
-bash /root/socks5-toolkit/xshell-install.sh --port 31080
-```
+不要同时照着两份教程操作。平台教程会带你完成 SSH 连接和安装，成功后再回到本页。
 
-## 四、从 macOS 安装
+## 第三步：确认服务器安装成功
 
-第一次使用 Mac 请按 [macOS 部署指南](macos.md)操作，下面仅保留完整流程中的命令摘要：
-
-```bash
-git clone --branch v1.7.3 --depth 1 https://github.com/wkx176617-sys/GIT.git
-cd GIT
-./deploy.sh root@VPS公网IP --port 31080
-```
-
-脚本会上传安装文件、下载并校验固定 GOST 版本、生成独立账号密码、创建低权限服务账户并启用开机启动。
-
-## 五、旧节点质检和覆写
-
-在运行过老代码的服务器上，先执行：
-
-```bash
-bash preflight.sh --port 31080
-```
-
-该命令只读取信息，不会停止服务。IP 不会因代码更新而冲突，质检关注的是 Ubuntu 镜像是否
-兼容、端口 `31080` 是否被占用，以及占用者是谁。
-
-如果结论是“通过”，运行标准安装。如果明确显示“可迁移：旧 sing-box”，可以执行：
-
-```bash
-bash overwrite.sh --port 31080
-```
-
-从 Mac 本地项目部署时，对应命令是：
-
-```bash
-./deploy.sh root@VPS公网IP --port 31080 --overwrite
-```
-
-确认后程序会把旧配置备份到 `/root/gost-socks-backups/时间戳/`，读取旧 SOCKS5 用户名和
-密码、停用旧 sing-box、安装 GOST，并保持原端口和凭据。安装后还会验证代理出口；安装或
-验收失败时会停止新 GOST 并尝试重新启用旧服务。
-如果检测到 x-ui、Xray、v2ray 或未知程序，程序会停止，不会擅自覆写。
-
-## 六、以后查询节点
-
-节点信息保存在对应 VPS 的 `/etc/gost-socks/node.env`，只有 root 可以读取。以后无论使用
-Mac 还是 Windows，只要通过 SSH/Xshell 登录该 VPS，就可以查询：
-
-```bash
-socksctl info         # IP、端口、用户名、运行状态；密码打码
-socksctl credentials  # 完整手工连接信息
-socksctl export       # 手工信息和两个客户端导入链接
-```
-
-不需要在 Mac 或 Windows 维护 Git 节点清单，也不要把导出结果上传 GitHub。你仍需保存 VPS
-公网 IP 和 SSH 登录凭据，否则无法进入服务器查询。
-
-## 七、配置比特浏览器
-
-```text
-代理类型：SOCKS5
-主机：VPS 公网 IP
-端口：31080
-用户名：安装结果中的用户名
-密码：安装结果中的密码
-```
-
-时区和地理位置使用“根据 IP 自动匹配”，开启 WebRTC 保护。
-
-## 八、验收
-
-先在 VPS 检查：
+平台教程显示安装完成后，SSH 登录 VPS，逐行运行：
 
 ```bash
 socksctl status
 socksctl check
 ```
 
-再在对应比特浏览器窗口检查：
+看到服务运行、端口监听和代理出口后，再进入下一步。失败时不要继续配置业务环境，直接进入
+[故障处理教程](troubleshooting.md)。
 
-1. 公网 IPv4 必须是 VPS IP。
-2. WebRTC 不得出现本地公网 IP。
-3. DNS 不得出现本地运营商。
-4. 时区和地理位置与代理地区合理一致。
-5. 关闭并重新打开窗口后，代理仍然正常。
+## 第四步：导入客户端并验收
 
-检测通过只代表网络配置一致，不保证任何第三方平台一定接受该 IP；云服务器 IP 也不会因为 SOCKS5 自动变成住宅 IP。
+进入唯一的[客户端导入与网络验收](clients.md)，根据实际使用的软件选择其中一个小节：
 
-## 九、日常维护
+- 比特浏览器；
+- v2rayN；
+- Shadowrocket（小火箭）。
 
-```bash
-socksctl status
-socksctl check
-socksctl info
-socksctl logs
-socksctl restart
-socksctl version
-socksctl doctor
-socksctl incidents
-```
+该专题同时提供可复制链接、二维码、手工填写和 IP、DNS、WebRTC、时区验收。验收通过后，
+首次搭建主流程即完成。
 
-显示完整凭据：
+## 第五步：以后只记一个入口
+
+日常管理时 SSH 登录对应 VPS，运行：
 
 ```bash
-socksctl credentials
+socksctl guide
 ```
 
-### 导入 v2rayN（Windows）
+中文菜单会引导只读检查、问题记录、脱敏报告和受控恢复。节点资料保存在服务器，不需要在
+Mac 或 Windows 保存本地节点清单。
 
-链接、二维码、手工填写和网络验收的统一说明见
-[客户端导入与网络验收](clients.md)。下面保留完整流程的命令摘要。
+## 首次成功后才看的内容
 
-建议使用 v2rayN 官方当前稳定版。登录服务器运行：
+以下内容不是首次搭建步骤，只有实际需要时再打开：
 
-```bash
-socksctl export v2rayn
-```
+| 情况 | 唯一入口 |
+|---|---|
+| 旧服务器已有代理 | 对应的 [Mac](macos.md) 或 [Windows](windows-xshell.md) 教程中的“旧节点” |
+| 协议异常、延迟高或原因不明 | [故障处理教程](troubleshooting.md) |
+| 查询复制链接或二维码 | [客户端导入与网络验收](clients.md) |
+| 考虑开启 BBR | [BBR 插件教程](../addons/bbr/README.md) |
+| 准备升级或回退 | [版本规则](version-policy.md)和对应[版本说明](releases/) |
 
-复制完整的 `socks://...` 一行，在 v2rayN 中使用“从剪贴板导入批量 URL”。该链接采用
-v2rayN 官方 SOCKS 分享格式；如果旧版无法识别，请先从
-[v2rayN 官方发布页](https://github.com/2dust/v2rayN/releases)升级。导入后先测试延迟和出口 IP。
+BBR 不是协议必需组件，主程序不会自动安装或启用它。标准 SOCKS5 是 TCP 代理，不是加密
+隧道，也不会自动解决 IP 质量、DNS、WebRTC 或第三方平台风控问题。
 
-### 导入 Shadowrocket（小火箭）
+## 安全底线
 
-登录服务器运行：
-
-```bash
-socksctl qr shadowrocket
-```
-
-用 Shadowrocket 扫描终端二维码即可。也可以执行 `socksctl export shadowrocket`，复制
-`socks5://...` 链接后在 Shadowrocket 中导入。如果服务器提示缺少 `qrencode`，执行：
-
-```bash
-apt-get update
-apt-get install -y qrencode
-```
-
-如果当前 Shadowrocket 版本没有自动识别链接，使用同一命令输出的“文本配置”核对后手工新增；
-格式为 `节点名称=socks5,地址,端口,用户,密码`。
-
-二维码和链接都包含完整密码，只能由自己扫描或复制，不要通过第三方二维码网站生成。
-
-更换 SOCKS5 密码：
-
-```bash
-socksctl rotate
-```
-
-更换后立即同步更新比特浏览器。
-
-### 故障诊断、记录与恢复
-
-```bash
-socksctl doctor          # 全面脱敏诊断；不自动修改
-socksctl doctor --local  # 只检查服务器本地确定性状态
-socksctl incidents       # 最近 20 条事件
-socksctl incidents 50    # 最近 50 条事件
-socksctl heal            # 本地确定性故障时恢复最后可用状态
-socksctl recover         # 明确确认后手工恢复
-socksctl snapshots       # 查看最后与前一健康快照
-socksctl recover previous # 退回前一健康版本
-socksctl note            # 交互式记录暂时无法分类的现象
-socksctl report          # 生成可交给 Codex 的脱敏故障报告
-socksctl reports         # 查询已有报告
-socksctl report-delete   # 二次确认后删除报告
-socksctl guide           # 中文编号菜单（新手推荐）
-```
-
-事件编号形如 `INC-...`，可以运行 `socksctl incidents INC-完整编号` 查询。每条记录包含是否
-首次出现、故障类型、执行动作和结果，不包含 SOCKS5 密码。
-如果暂时无法描述原因，运行 `socksctl note`，按提示输入看到的现象（不要输入密码）；程序会
-先生成事件编号，以后可以继续补充分析。
-
-安装、升级和密码轮换会在修改前建立事务快照，通过服务、端口和代理验收后才更新“最后可用
-状态”。未预料的失败会先记录再回退。外部网络全部失败会记录为外部故障；它可能来自 VPN、
-萤光云安全组、服务商线路或检测网站，因此不会自动覆写本地协议。
-
-`recover` 默认恢复 `last-good`，适合当前文件损坏；`recover previous` 恢复 `previous-good`，
-适合新版本曾通过验收、但后来发现未知兼容问题。服务器只保留这两级健康快照，避免包含
-凭据的备份无限增长。
-
-`heal` 不是“遇到错误就重置”。它只允许处理配置缺失、权限错误、配置记录不一致这三个
-明确根因；服务未运行或端口未监听只能作为这些明确根因的伴随现象。端口冲突、单独的服务
-停止、未知错误和外部网络问题均会停止自动维修。完整人工流程见
-[手动检查、维修与 Codex 求助教程](troubleshooting.md)。
-
-不熟悉命令时只需运行 `socksctl guide`，输入一个数字选择操作。无效数字不会执行任何修改；
-自动维修与手工恢复仍保留各自的白名单和二次确认。诊断严格只读时使用
-`socksctl doctor --no-record`。
-
-## 十、升级与回退
-
-升级前阅读 [更新记录](../CHANGELOG.md) 和对应的 [版本说明](releases/)。确认兼容后切换到指定标签并重新运行安装入口。安装器会保留已有节点名称、端口和凭据。
-
-需要回到上一稳定版本时，切换旧标签并重新安装，例如：
-
-```bash
-cd /root/socks5-toolkit
-git fetch --tags
-git switch --detach v1.1.0
-bash xshell-install.sh --port 31080
-```
-
-不要使用 `git reset --hard` 清理服务器目录。
-
-## 十一、可选 BBR + FQ 插件
-
-BBR 插件位于 `addons/bbr/`，与主程序分离。主程序更新不会自动启用它。只有线路确实存在
-高延迟、丢包或吞吐问题时才考虑使用：
-
-```bash
-cd /root/socks5-toolkit/addons/bbr
-bash install.sh
-bbrctl check
-bbrctl health
-bbrctl enable
-```
-
-查看状态或恢复：
-
-```bash
-bbrctl status
-bbrctl repair
-bbrctl restore
-```
-
-首次启用会保存当前设置，失败时尝试回退。它不会修改 SOCKS5 节点，也不能改善 IP 质量、
-DNS/WebRTC 隔离或加密。完整说明见 [BBR 插件教程](../addons/bbr/README.md)。
-
-## 版本选择依据
-
-- Ubuntu 24.04 LTS 的标准安全维护持续到 2029 年，适合作为新服务器的长期基础系统；Ubuntu 22.04 LTS 仍受支持到 2027 年，无需为了本工具立即升级：[Ubuntu 官方发布周期](https://ubuntu.com/about/release-cycle)。
-- GOST 3.2.6 是本项目当前固定并完成校验、配置解析和端到端代理测试的版本：[GOST 官方发布页](https://github.com/go-gost/gost/releases/tag/v3.2.6)。
-- Windows 教程以 Xshell 8 为准；Xshell 8 支持 SSH、远程文件管理器以及与 Xftp 的 SFTP 文件传输：[Xshell 8 官方功能](https://www.netsarang.com/en/xshell-all-features/)。
-- v2rayN 的 SOCKS 分享链接格式以官方源码中的 [SocksFmt](https://github.com/2dust/v2rayN/blob/master/v2rayN/ServiceLib/Handler/Fmt/SocksFmt.cs) 为依据。
+- 不把 `socksctl credentials`、`socksctl export`、二维码、SSH 密码、私钥或 Token 上传 GitHub。
+- 不清楚端口占用者时不删除旧服务、不重装系统、不强行覆写。
+- 未知故障先记录和生成脱敏报告；自动维修只处理白名单内的确定问题。
+- 生产节点只使用稳定标签，不直接部署开发中的 `main`。
