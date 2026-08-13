@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
-readonly TOOL_VERSION_CURRENT="1.7.6"
+readonly TOOL_VERSION_CURRENT="1.8.0"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -13,6 +13,7 @@ readonly CONTROL_PATH="/usr/local/sbin/socksctl"
 readonly UNINSTALL_PATH="/usr/local/sbin/socks-uninstall"
 readonly DOCTOR_PATH="/usr/local/sbin/socks-doctor"
 readonly SAFETY_PATH="/usr/local/sbin/socks-safety"
+readonly REFRESH_IP_PATH="/usr/local/sbin/socks-refresh-ip"
 readonly LOCK_FILE="/run/lock/gost-socks-main.lock"
 
 usage() {
@@ -67,7 +68,7 @@ done
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.7.6 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.8.0 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
@@ -191,6 +192,9 @@ doctor_source="$script_dir/socks-doctor"
 safety_source="$script_dir/socks-safety"
 [[ -f $safety_source ]] || safety_source="$script_dir/scripts/socks-safety"
 [[ -f $safety_source ]] || die "安装包缺少 socks-safety"
+refresh_ip_source="$script_dir/socks-refresh-ip"
+[[ -f $refresh_ip_source ]] || refresh_ip_source="$script_dir/scripts/socks-refresh-ip"
+[[ -f $refresh_ip_source ]] || die "安装包缺少 socks-refresh-ip"
 uninstall_source="$script_dir/uninstall.sh"
 [[ -f $uninstall_source ]] || die "安装包缺少 uninstall.sh"
 
@@ -205,6 +209,7 @@ if [[ $existing_tool_version == "$TOOL_VERSION_CURRENT" \
    && $username == "$existing_username" \
    && $password == "$existing_password" \
    && -x $DOCTOR_PATH \
+   && -x $REFRESH_IP_PATH \
    && -d /var/lib/gost-socks-safety/snapshots/last-good \
    && $(systemctl is-active gost-socks.service 2>/dev/null || true) == active ]]; then
   if "$DOCTOR_PATH" --local >/dev/null 2>&1; then
@@ -300,6 +305,7 @@ install -m 0755 "$control_source" "$CONTROL_PATH"
 install -m 0755 "$uninstall_source" "$UNINSTALL_PATH"
 install -m 0755 "$doctor_source" "$DOCTOR_PATH"
 install -m 0755 "$safety_source" "$SAFETY_PATH"
+install -m 0755 "$refresh_ip_source" "$REFRESH_IP_PATH"
 
 service_temp=$(mktemp /etc/systemd/system/.gost-socks.service.XXXXXX)
 cat >"$service_temp" <<EOF

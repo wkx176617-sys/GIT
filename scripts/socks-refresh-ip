@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly CONFIG_DIR="${SOCKS_CONFIG_DIR:-/etc/gost-socks}"
+readonly ENV_FILE="$CONFIG_DIR/node.env"
+readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
+readonly SERVICE="gost-socks.service"
+readonly SERVICE_FILE="${SOCKS_SERVICE_FILE:-/etc/systemd/system/gost-socks.service}"
+readonly SAFETY="${SOCKS_SAFETY_BIN:-/usr/local/sbin/socks-safety}"
+readonly DOCTOR="${SOCKS_DOCTOR_BIN:-/usr/local/sbin/socks-doctor}"
+readonly LOCK_FILE="${SOCKS_LOCK_FILE:-/run/lock/gost-socks-main.lock}"
+readonly DETECT_ENDPOINTS="${SOCKS_IP_ENDPOINTS:-https://api.ipify.org https://icanhazip.com https://ifconfig.me/ip}"
+
+usage() {
+  cat <<'EOF'
+用法：sudo socks-refresh-ip [--check]
+
+同一台VPS更换公网IPv4后，更新节点记录、GOST服务名称和客户端导出信息。
+保留端口、用户名和密码；检测结果不一致时停止，不修改任何内容。
+--check 只检测并对比，不建立快照、不修改文件。
+EOF
+}
+
+die() { printf '错误：%s\n' "$*" >&2; exit 1; }
+read_env_value() {
+  local key=$1
+  awk -F= -v wanted="$key" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' \
+    "$ENV_FILE" 2>/dev/null || true
+}
+is_public_ipv4() {
+  local ip=$1 octet
+  local -a octets=()
+  [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  IFS=. read -r -a octets <<<"$ip"
+  for octet in "${octets[@]}"; do
+    (( 10#$octet >= 0 && 10#$octet <= 255 )) || return 1
+  done
+  [[ $ip != 0.* && $ip != 10.* && $ip != 127.* && $ip != 169.254.* \
+     && $ip != 192.168.* && ! $ip =~ ^172\.(1[6-9]|2[0-9]|3[01])\. ]]
+}
+detect_public_ip_consensus() {
+  local endpoint candidate ip count winner="" winner_count=0
+  local -a detected=()
+  local -a endpoints=()
+  read -r -a endpoints <<<"$DETECT_ENDPOINTS"
+  (( ${#endpoints[@]} >= 2 )) || die "公网IP检测目标至少需要两个"
+  for endpoint in "${endpoints[@]}"; do
+    candidate=$(curl -4 --proto '=https' --tlsv1.2 --fail --silent --show-error \
+      --max-time 10 "$endpoint" 2>/dev/null | tr -d '[:space:]' || true)
+    is_public_ipv4 "$candidate" && detected+=("$candidate")
+  done
+  for ip in "${detected[@]}"; do
+    count=0
+    for candidate in "${detected[@]}"; do
+      [[ $candidate == "$ip" ]] && count=$((count + 1))
+    done
+    if (( count > winner_count )); then winner=$ip; winner_count=$count; fi
+  done
+  (( winner_count >= 2 )) \
+    || die "多个公网IP检测目标没有得到一致结果，未修改任何内容；请稍后重试或人工检查网络"
+  printf '%s\n' "$winner"
+}
+write_env() {
+  local temp_file
+  temp_file=$(mktemp "$CONFIG_DIR/.node.env.XXXXXX")
+  cat >"$temp_file" <<EOF
+NODE_NAME=$NEW_PUBLIC_IP
+PUBLIC_IP=$NEW_PUBLIC_IP
+SOCKS_PORT=$SOCKS_PORT
+SOCKS_USERNAME=$SOCKS_USERNAME
+SOCKS_PASSWORD=$SOCKS_PASSWORD
+TOOL_VERSION=$TOOL_VERSION
+EOF
+  chmod 0600 "$temp_file"
+  mv -f "$temp_file" "$ENV_FILE"
+}
+write_config() {
+  local temp_file
+  temp_file=$(mktemp "$CONFIG_DIR/.gost.yaml.XXXXXX")
+  cat >"$temp_file" <<EOF
+services:
+  - name: "$NEW_PUBLIC_IP"
+    addr: ":$SOCKS_PORT"
+    handler:
+      type: socks5
+      auth:
+        username: "$SOCKS_USERNAME"
+        password: "$SOCKS_PASSWORD"
+      metadata:
+        notls: true
+    listener:
+      type: tcp
+EOF
+  if [[ $CONFIG_DIR == /etc/gost-socks ]]; then chown root:gost-socks "$temp_file"; fi
+  chmod 0640 "$temp_file"
+  mv -f "$temp_file" "$CONFIG_FILE"
+}
+
+[[ ${1:-} != --help && ${1:-} != -h ]] || { usage; exit 0; }
+check_only=false
+if [[ ${1:-} == --check ]]; then check_only=true; shift; fi
+[[ $# -eq 0 ]] || die "只接受 --check"
+if [[ $CONFIG_DIR == /etc/gost-socks ]]; then
+  [[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"
+fi
+[[ -f $ENV_FILE && -f $CONFIG_FILE && -f $SERVICE_FILE ]] || die "当前节点安装不完整"
+
+OLD_PUBLIC_IP=$(read_env_value PUBLIC_IP)
+OLD_NODE_NAME=$(read_env_value NODE_NAME)
+SOCKS_PORT=$(read_env_value SOCKS_PORT)
+SOCKS_USERNAME=$(read_env_value SOCKS_USERNAME)
+SOCKS_PASSWORD=$(read_env_value SOCKS_PASSWORD)
+TOOL_VERSION=$(read_env_value TOOL_VERSION)
+[[ $SOCKS_PORT =~ ^[0-9]+$ && $SOCKS_PORT -ge 1024 && $SOCKS_PORT -le 65535 \
+   && $SOCKS_USERNAME =~ ^[A-Za-z0-9._-]{4,32}$ \
+   && $SOCKS_PASSWORD =~ ^[A-Za-z0-9._-]{16,64}$ \
+   && $TOOL_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "节点记录格式异常，未修改任何内容"
+
+NEW_PUBLIC_IP=$(detect_public_ip_consensus)
+if [[ $check_only == true ]]; then
+  printf '节点记录中的公网IP：%s\n' "${OLD_PUBLIC_IP:-未知}"
+  printf '当前检测到的公网IP：%s\n' "$NEW_PUBLIC_IP"
+  if [[ $NEW_PUBLIC_IP == "$OLD_PUBLIC_IP" && $OLD_NODE_NAME == "$OLD_PUBLIC_IP" ]]; then
+    printf '结论：无需更新。\n'
+  else
+    printf '结论：检测到变化；确认供应商已换IP后运行 socksctl refresh-ip。\n'
+  fi
+  exit 0
+fi
+[[ -t 0 ]] || die "更换公网IP必须在交互式 SSH/Xshell 窗口中确认"
+[[ -x $SAFETY && -x $DOCTOR ]] || die "安全组件不完整，请先升级主程序"
+command -v flock >/dev/null 2>&1 || die "缺少 flock（util-linux）"
+exec 9>"$LOCK_FILE"
+flock -n 9 || die "另一个安装、覆写或维修任务正在运行，请等待完成后重试"
+if [[ $NEW_PUBLIC_IP == "$OLD_PUBLIC_IP" && $OLD_NODE_NAME == "$OLD_PUBLIC_IP" ]]; then
+  printf '服务器公网IP仍为 %s，节点记录无需更新。\n' "$NEW_PUBLIC_IP"
+  exit 0
+fi
+printf '检测到公网IP变化：%s -> %s\n' "${OLD_PUBLIC_IP:-未知}" "$NEW_PUBLIC_IP"
+printf '端口、用户名和密码保持不变。输入 REFRESH-IP 确认：'
+read -r answer
+[[ $answer == REFRESH-IP ]] || { printf '已取消，没有修改任何内容。\n'; exit 0; }
+
+transaction_snapshot=$($SAFETY snapshot 2>/dev/null || true)
+[[ -n $transaction_snapshot ]] || die "无法建立修改前快照，已停止更新"
+rollback() {
+  local status=$?
+  trap - ERR
+  set +e
+  incident_id=$($SAFETY incident IP_REFRESH_FAILED rollback pending \
+    "old-${OLD_PUBLIC_IP:-unknown}-new-$NEW_PUBLIC_IP" 2>/dev/null || true)
+  $SAFETY restore "$transaction_snapshot" >/dev/null 2>&1
+  printf '公网IP记录更新失败，已尝试恢复原状态。事件编号：%s\n' \
+    "${incident_id:-未生成}" >&2
+  exit "$status"
+}
+trap rollback ERR
+write_env
+write_config
+service_temp=$(mktemp "$(dirname "$SERVICE_FILE")/.gost-socks.service.XXXXXX")
+sed "s/^Description=.*/Description=GOST SOCKS5 Proxy ($NEW_PUBLIC_IP)/" \
+  "$SERVICE_FILE" >"$service_temp"
+chmod 0644 "$service_temp"
+mv -f "$service_temp" "$SERVICE_FILE"
+systemctl daemon-reload
+systemctl restart "$SERVICE"
+systemctl is-active --quiet "$SERVICE"
+$DOCTOR --local >/dev/null
+proxy_public_ip=$(curl -4 --proto '=https' --tlsv1.2 --fail --silent --show-error \
+  --max-time 20 --socks5-hostname "127.0.0.1:$SOCKS_PORT" \
+  --proxy-user "$SOCKS_USERNAME:$SOCKS_PASSWORD" https://api.ipify.org \
+  | tr -d '[:space:]')
+[[ $proxy_public_ip == "$NEW_PUBLIC_IP" ]] \
+  || die "更新后代理出口不是检测到的新公网IP"
+$SAFETY promote "$transaction_snapshot" >/dev/null
+trap - ERR
+incident_id=$($SAFETY incident IP_REFRESH_COMPLETE update success \
+  "old-${OLD_PUBLIC_IP:-unknown}-new-$NEW_PUBLIC_IP" 2>/dev/null || true)
+
+printf '公网IP记录已更新：%s\n' "$NEW_PUBLIC_IP"
+printf '端口、用户名和密码没有改变。事件编号：%s\n' "${incident_id:-未生成}"
+printf '下一步只运行 socksctl export，并在所有客户端把旧地址替换为新地址。\n'

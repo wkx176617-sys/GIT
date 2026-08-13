@@ -8,6 +8,7 @@ readonly SERVICE="gost-socks.service"
 readonly BINARY="/usr/local/lib/gost-socks/gost"
 readonly SAFETY="${SOCKS_SAFETY_BIN:-/usr/local/sbin/socks-safety}"
 readonly DOCTOR="${SOCKS_DOCTOR_BIN:-/usr/local/sbin/socks-doctor}"
+readonly REFRESH_IP="${SOCKS_REFRESH_IP_BIN:-/usr/local/sbin/socks-refresh-ip}"
 readonly LOCK_FILE="${SOCKS_LOCK_FILE:-/run/lock/gost-socks-main.lock}"
 
 usage() {
@@ -21,6 +22,7 @@ usage() {
   credentials       显示完整账号密码
   export [类型]     导出客户端连接信息：all、v2rayn、shadowrocket
   qr [类型]         在终端生成二维码：v2rayn、shadowrocket
+  refresh-ip        VPS更换公网IP后安全更新节点记录和导入信息
   logs [行数]       查看日志，默认 100 行
   restart           重启服务
   rotate            自动生成新密码并重启
@@ -209,6 +211,11 @@ case "$command_name" in
     esac
     printf '请使用自己的设备扫描，二维码包含完整节点密码。\n'
     qrencode -t ANSIUTF8 "$qr_link"
+    ;;
+  refresh-ip)
+    require_root
+    [[ -x $REFRESH_IP ]] || die "未安装公网IP更新模块，请先升级主程序"
+    exec "$REFRESH_IP" "$@"
     ;;
   logs)
     require_root
@@ -488,6 +495,7 @@ SOCKS5 中文新手菜单
   6. 尝试白名单自动维修
   7. 手工恢复最后可用状态（有二次确认）
   8. 查看节点信息（密码打码）
+  9. VPS更换公网IP后更新节点记录
   0. 退出，不做任何操作
 EOF
     printf '请输入一个数字后按回车：'
@@ -501,6 +509,7 @@ EOF
       6) exec "$0" heal ;;
       7) exec "$0" recover ;;
       8) exec "$0" info ;;
+      9) exec "$0" refresh-ip ;;
       0) printf '已退出，没有修改任何内容。\n' ;;
       *) die "输入无效，没有执行任何操作；请重新运行 socksctl guide" ;;
     esac

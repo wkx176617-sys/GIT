@@ -85,6 +85,9 @@ socksctl export shadowrocket
 时区和地理位置选择“根据 IP 自动匹配”，并开启 WebRTC 保护。每个浏览器环境应使用预先
 规划的独立节点，不要在验收完成前登录业务账号。
 
+首次配置还必须完成[比特浏览器代理失效时避免裸连](bitbrowser-fail-closed.md)：启用网络不通
+停止打开、清空代理直连白名单，并使用无业务账号的测试窗口做一次错误端口验收。
+
 ## 人工验收
 
 先在 VPS 运行：
@@ -104,6 +107,8 @@ socksctl check
 
 推荐检测入口见[网络检测网站公告](announcements/network-check-links.md)。检测通过只代表当前
 网络配置一致，不代表第三方平台一定接受该 IP，也不会把云服务器 IP 变成住宅 IP。
+
+手机使用小火箭或检查 Wi-Fi、流量和 VPN 时，使用[手机网络环境检查](mobile-network-check.md)。
 
 ## 凭据安全
 

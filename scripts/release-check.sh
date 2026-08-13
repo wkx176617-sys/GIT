@@ -16,7 +16,9 @@ release_file="docs/releases/$tag.md"
 [[ -f $release_file ]] || { printf '缺少版本说明：%s\n' "$release_file" >&2; exit 1; }
 [[ -f AGENTS.md && -f docs/project-principles.md && -f docs/architecture.md \
    && -f docs/modules.md && -f docs/macos.md && -f docs/windows-xshell.md \
-   && -f docs/clients.md && -f docs/visual-style.md ]] \
+   && -f docs/clients.md && -f docs/visual-style.md \
+   && -f docs/change-public-ip.md && -f docs/mobile-network-check.md \
+   && -f docs/bitbrowser-fail-closed.md ]] \
   || { printf '缺少仓库规则、架构、模块索引、平台教程或客户端教程\n' >&2; exit 1; }
 [[ -f .github/ISSUE_TEMPLATE/bug_report.yml \
    && -f .github/ISSUE_TEMPLATE/feature_request.yml \
@@ -32,6 +34,14 @@ grep -Fq '[客户端导入与网络验收](docs/clients.md)' README.md \
   || { printf 'README 未提供客户端专用入口\n' >&2; exit 1; }
 grep -Fq 'socksctl export' docs/clients.md && grep -Fq 'socksctl qr shadowrocket' docs/clients.md \
   || { printf '客户端教程缺少链接或二维码说明\n' >&2; exit 1; }
+grep -Fq 'socksctl refresh-ip --check' docs/change-public-ip.md \
+  && grep -Fq 'socksctl refresh-ip' docs/change-public-ip.md \
+  || { printf '换IP教程缺少只读检查或更新命令\n' >&2; exit 1; }
+grep -Fq 'stopWhileNetError' docs/bitbrowser-fail-closed.md \
+  && grep -Fq '代理直连白名单' docs/bitbrowser-fail-closed.md \
+  || { printf '比特浏览器教程缺少网络错误停止或直连白名单\n' >&2; exit 1; }
+grep -Fq 'Wi-Fi' docs/mobile-network-check.md && grep -Fq '手机流量' docs/mobile-network-check.md \
+  || { printf '手机教程缺少Wi-Fi或流量切换检查\n' >&2; exit 1; }
 grep -Fq '## 复杂度与性能影响' "$release_file" \
   || { printf '版本说明缺少“复杂度与性能影响”\n' >&2; exit 1; }
 grep -Fq 'GOST 是唯一必要的常驻业务进程' docs/project-principles.md \

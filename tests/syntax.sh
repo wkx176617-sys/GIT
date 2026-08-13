@@ -13,6 +13,7 @@ files=(
   "$project_dir/scripts/socksctl"
   "$project_dir/scripts/socks-doctor"
   "$project_dir/scripts/socks-safety"
+  "$project_dir/scripts/socks-refresh-ip"
   "$project_dir/scripts/release-check.sh"
   "$project_dir/addons/bbr/bbrctl"
   "$project_dir/addons/bbr/install.sh"
@@ -32,6 +33,7 @@ done
 "$project_dir/scripts/socksctl" --help >/dev/null
 "$project_dir/scripts/socks-doctor" --help >/dev/null
 "$project_dir/scripts/socks-safety" --help >/dev/null
+"$project_dir/scripts/socks-refresh-ip" --help >/dev/null
 "$project_dir/addons/bbr/bbrctl" --help >/dev/null
 "$project_dir/addons/bbr/install.sh" --help >/dev/null
 "$project_dir/addons/bbr/uninstall.sh" --help >/dev/null
@@ -40,7 +42,14 @@ grep -q 'port=31080' "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.7.6"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.8.0"' "$project_dir/install.sh"
+grep -q 'refresh-ip' "$project_dir/scripts/socksctl"
+grep -q 'detect_public_ip_consensus' "$project_dir/scripts/socks-refresh-ip"
+grep -q 'winner_count >= 2' "$project_dir/scripts/socks-refresh-ip"
+grep -q '输入 REFRESH-IP 确认' "$project_dir/scripts/socks-refresh-ip"
+grep -q 'trap rollback ERR' "$project_dir/scripts/socks-refresh-ip"
+grep -q -- '--check' "$project_dir/scripts/socks-refresh-ip"
+grep -q 'proxy_public_ip' "$project_dir/scripts/socks-refresh-ip"
 grep -q '安全跳过' "$project_dir/install.sh"
 grep -q 'gost-socks-main.lock' "$project_dir/install.sh"
 grep -q 'INSTALL_UNKNOWN' "$project_dir/install.sh"
@@ -86,7 +95,8 @@ fi
 if rg -n 'crontab|/etc/cron|systemctl[[:space:]]+(enable|start).*\.timer|docker[[:space:]]+run|podman[[:space:]]+run' \
   "$project_dir/deploy.sh" "$project_dir/install.sh" "$project_dir/xshell-install.sh" \
   "$project_dir/preflight.sh" "$project_dir/overwrite.sh" "$project_dir/scripts/socksctl" \
-  "$project_dir/scripts/socks-doctor" "$project_dir/scripts/socks-safety"; then
+  "$project_dir/scripts/socks-doctor" "$project_dir/scripts/socks-safety" \
+  "$project_dir/scripts/socks-refresh-ip"; then
   printf '核心程序引入了定时任务、容器或后台调度，违反轻量架构边界。\n' >&2
   exit 1
 fi
@@ -180,6 +190,41 @@ if "${safety_command[@]}" verify "$safety_test_dir/state/snapshots/last-good" >/
   exit 1
 fi
 rm -rf -- "$safety_test_dir"
+
+refresh_test_dir=$(mktemp -d)
+mkdir -p "$refresh_test_dir/fakebin" "$refresh_test_dir/config"
+cat >"$refresh_test_dir/fakebin/curl" <<'EOF'
+#!/usr/bin/env bash
+case "${*: -1}" in
+  one|two) printf '198.51.100.22\n' ;;
+  three) printf '203.0.113.99\n' ;;
+  *) exit 1 ;;
+esac
+EOF
+chmod +x "$refresh_test_dir/fakebin/curl"
+cat >"$refresh_test_dir/config/node.env" <<'EOF'
+NODE_NAME=203.0.113.10
+PUBLIC_IP=203.0.113.10
+SOCKS_PORT=31080
+SOCKS_USERNAME=node_example
+SOCKS_PASSWORD=0123456789abcdef0123456789abcdef
+TOOL_VERSION=1.8.0
+EOF
+cat >"$refresh_test_dir/config/gost.yaml" <<'EOF'
+services:
+  - name: "203.0.113.10"
+    addr: ":31080"
+EOF
+printf 'Description=GOST SOCKS5 Proxy (203.0.113.10)\n' >"$refresh_test_dir/gost-socks.service"
+refresh_check_output=$(env PATH="$refresh_test_dir/fakebin:$PATH" \
+  SOCKS_CONFIG_DIR="$refresh_test_dir/config" \
+  SOCKS_SERVICE_FILE="$refresh_test_dir/gost-socks.service" \
+  SOCKS_IP_ENDPOINTS='one two three' \
+  "$project_dir/scripts/socks-refresh-ip" --check)
+grep -Fq '当前检测到的公网IP：198.51.100.22' <<<"$refresh_check_output"
+grep -Fq '检测到变化' <<<"$refresh_check_output"
+grep -Fq 'PUBLIC_IP=203.0.113.10' "$refresh_test_dir/config/node.env"
+rm -rf -- "$refresh_test_dir"
 
 if command -v jq >/dev/null 2>&1; then
   legacy_config="$project_dir/tests/sing-box.legacy.json"

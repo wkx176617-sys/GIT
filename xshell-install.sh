@@ -23,6 +23,8 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 [[ -f $script_dir/install.sh ]] || die "同目录中缺少 install.sh，请完整下载或上传本项目"
 [[ -f $script_dir/preflight.sh ]] || die "同目录中缺少 preflight.sh，请完整下载或上传本项目"
 [[ -f $script_dir/overwrite.sh ]] || die "同目录中缺少 overwrite.sh，请完整下载或上传本项目"
+[[ -f $script_dir/scripts/socks-refresh-ip || -f $script_dir/socks-refresh-ip ]] \
+  || die "项目缺少 socks-refresh-ip，请完整下载或上传本项目"
 
 overwrite=false
 install_args=()

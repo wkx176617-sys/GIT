@@ -14,6 +14,7 @@
 | 日常入口 | `scripts/socksctl` | 核心接口 | 否 | doctor、safety | 导出、白名单、菜单 |
 | 健康诊断 | `scripts/socks-doctor` | 核心诊断 | 否 | systemd、ss、curl | 只读和有限重试 |
 | 安全状态 | `scripts/socks-safety` | 核心安全 | 否 | 文件系统、systemd | 快照、篡改、熔断 |
+| 公网IP更新 | `scripts/socks-refresh-ip` | 生命周期模块 | 否 | safety、doctor、curl | 多目标一致、确认、回退 |
 | 卸载 | `uninstall.sh` | 核心生命周期 | 否 | systemd | 确认和清理范围 |
 
 正常运行时，上述脚本都不会驻留；只有 GOST 由 systemd 管理并持续提供 SOCKS5 服务。
@@ -38,6 +39,9 @@
 | `docs/macos.md` | Mac Terminal、SSH、部署、迁移和升级步骤 |
 | `docs/windows-xshell.md` | Windows新手逐步操作和粘贴防错 |
 | `docs/clients.md` | v2rayN、小火箭、比特浏览器导入和人工验收 |
+| `docs/change-public-ip.md` | 同一台VPS只更换公网IP的安全流程 |
+| `docs/mobile-network-check.md` | 手机Wi-Fi、流量、VPN和客户端出口检查 |
+| `docs/bitbrowser-fail-closed.md` | 比特浏览器网络错误停止、白名单和破坏性验收 |
 | `docs/visual-style.md` | GitHub公开界面的配色、层级、文案和图片预算 |
 | `docs/troubleshooting.md` | 故障检查、恢复边界和Codex提问模板 |
 | `docs/project-principles.md` | 宗旨、性能预算和功能准入规则 |
@@ -50,6 +54,7 @@
 - Xshell复制粘贴错误：先看 `xshell-install.sh` 和 Xshell 教程。
 - Mac连接或本地部署错误：先看 `deploy.sh` 和 macOS教程。
 - 客户端导入、二维码或浏览器验收：只改客户端专题，不复制到平台教程。
+- VPS公网IP替换：改 `socks-refresh-ip` 和换IP专题，不并入安装器。
 - 服务、端口、资源或线路检测：改 `socks-doctor`，不要写入安装器。
 - 快照、事件、校验、熔断：改 `socks-safety`，不要让 `socksctl` 自己保存状态。
 - 用户命令和菜单：改 `socksctl`，复杂实现应下沉到对应模块。
