@@ -7,7 +7,16 @@ readonly INCIDENT_FILE="$STATE_ROOT/incidents.tsv"
 readonly CONFIG_DIR="${SOCKS_CONFIG_DIR:-/etc/gost-socks}"
 readonly BINARY_DIR="${SOCKS_BINARY_DIR:-/usr/local/lib/gost-socks}"
 readonly SERVICE_FILE="${SOCKS_SERVICE_FILE:-/etc/systemd/system/gost-socks.service}"
+readonly TOOLS_DIR="${SOCKS_TOOLS_DIR:-/usr/local/sbin}"
 readonly SERVICE="gost-socks.service"
+readonly -a TOOL_NAMES=(
+  socksctl
+  socks-uninstall
+  socks-doctor
+  socks-safety
+  socks-refresh-ip
+  socks-upgrade
+)
 
 usage() {
   cat <<'EOF'
@@ -39,6 +48,21 @@ prune_transactions() {
       rm -rf -- "${snapshots[index]}"
     done
   fi
+}
+
+wait_for_service_ready() {
+  local port attempt
+  port=$(awk -F= '$1 == "SOCKS_PORT" {print $2; exit}' "$CONFIG_DIR/node.env" 2>/dev/null || true)
+  [[ $port =~ ^[0-9]+$ ]] || return 1
+  command -v ss >/dev/null 2>&1 || return 1
+  for ((attempt=1; attempt<=15; attempt++)); do
+    if systemctl is-active --quiet "$SERVICE" \
+       && ss -H -lnt | awk -v wanted=":$port" '$4 ~ wanted "$" {found=1} END {exit !found}'; then
+      return 0
+    fi
+    (( attempt == 15 )) || sleep 1
+  done
+  return 1
 }
 
 safe_field() {
@@ -83,15 +107,23 @@ record_incident() {
 }
 
 copy_current_to() {
-  local destination=$1
+  local destination=$1 tool_name
   install -d -m 0700 "$destination"
   [[ -d $CONFIG_DIR ]] && cp -a "$CONFIG_DIR" "$destination/config"
   [[ -d $BINARY_DIR ]] && cp -a "$BINARY_DIR" "$destination/binary"
   [[ -f $SERVICE_FILE ]] && cp -a "$SERVICE_FILE" "$destination/gost-socks.service"
+  install -d -m 0700 "$destination/tools"
+  : >"$destination/tools-present"
+  for tool_name in "${TOOL_NAMES[@]}"; do
+    if [[ -f $TOOLS_DIR/$tool_name ]]; then
+      cp -a "$TOOLS_DIR/$tool_name" "$destination/tools/$tool_name"
+      printf '%s\n' "$tool_name" >>"$destination/tools-present"
+    fi
+  done
+  chmod 0600 "$destination/tools-present"
   systemctl is-enabled "$SERVICE" >"$destination/enabled-state" 2>/dev/null || true
   systemctl is-active "$SERVICE" >"$destination/active-state" 2>/dev/null || true
   date -u +%Y-%m-%dT%H:%M:%SZ >"$destination/created-at"
-  chmod -R go-rwx "$destination"
   (
     cd "$destination"
     find . -type f ! -name MANIFEST.sha256 -print0 \
@@ -102,6 +134,7 @@ copy_current_to() {
 
 validate_snapshot() {
   local source=${1:-$SNAPSHOT_ROOT/last-good} env_file config_file port username password config_content
+  local tool_name known_tool expected_tool
   [[ -d $source/config && -d $source/binary && -f $source/gost-socks.service \
      && -f $source/config/node.env && -f $source/config/gost.yaml \
      && -x $source/binary/gost ]] || die "快照结构不完整：$source"
@@ -121,6 +154,20 @@ validate_snapshot() {
     || die "快照配置与凭据记录不一致：$source"
   grep -Fq 'ExecStart=' "$source/gost-socks.service" \
     || die "快照服务定义不完整：$source"
+  if [[ -f $source/tools-present ]]; then
+    while IFS= read -r tool_name; do
+      [[ -n $tool_name ]] || continue
+      known_tool=false
+      for expected_tool in "${TOOL_NAMES[@]}"; do
+        if [[ $tool_name == "$expected_tool" ]]; then
+          known_tool=true
+          break
+        fi
+      done
+      [[ $known_tool == true && -f $source/tools/$tool_name ]] \
+        || die "快照管理工具清单异常：$source"
+    done <"$source/tools-present"
+  fi
   if [[ -f $source/MANIFEST.sha256 ]]; then
     (cd "$source" && sha256sum -c MANIFEST.sha256 >/dev/null) \
       || die "快照校验值不匹配：$source"
@@ -167,7 +214,8 @@ restore_snapshot() {
   local source=${1:-$SNAPSHOT_ROOT/last-good}
   init_state
   validate_snapshot "$source" >/dev/null
-  local restore_id stage_config stage_binary old_config old_binary old_service config_parent binary_parent
+  local restore_id stage_config stage_binary stage_tools old_config old_binary old_service old_tools
+  local config_parent binary_parent tool_name restore_tools=false
   restore_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
   config_parent=$(dirname "$CONFIG_DIR")
   binary_parent=$(dirname "$BINARY_DIR")
@@ -175,10 +223,35 @@ restore_snapshot() {
   stage_binary=$(mktemp -d "$binary_parent/.gost-socks.restore.XXXXXX")
   cp -a "$source/config/." "$stage_config/"
   cp -a "$source/binary/." "$stage_binary/"
+  chmod 0750 "$stage_config"
+  chmod 0600 "$stage_config/node.env"
+  chmod 0640 "$stage_config/gost.yaml"
+  chmod 0755 "$stage_binary" "$stage_binary/gost"
+  if [[ $CONFIG_DIR == /etc/gost-socks && $BINARY_DIR == /usr/local/lib/gost-socks ]]; then
+    chown root:gost-socks "$stage_config" "$stage_config/gost.yaml"
+    chown root:root "$stage_config/node.env" "$stage_binary" "$stage_binary/gost"
+  fi
   old_config="$STATE_ROOT/.restore-old-config-$restore_id"
   old_binary="$STATE_ROOT/.restore-old-binary-$restore_id"
   old_service="$STATE_ROOT/.restore-old-service-$restore_id"
+  old_tools="$STATE_ROOT/.restore-old-tools-$restore_id"
   [[ -f $SERVICE_FILE ]] && cp -a "$SERVICE_FILE" "$old_service"
+  if [[ -f $source/tools-present ]]; then
+    restore_tools=true
+    stage_tools=$(mktemp -d "$STATE_ROOT/.restore-tools.XXXXXX")
+    install -d -m 0700 "$old_tools/tools"
+    : >"$old_tools/tools-present"
+    for tool_name in "${TOOL_NAMES[@]}"; do
+      if [[ -f $TOOLS_DIR/$tool_name ]]; then
+        cp -a "$TOOLS_DIR/$tool_name" "$old_tools/tools/$tool_name"
+        printf '%s\n' "$tool_name" >>"$old_tools/tools-present"
+      fi
+      if grep -Fxq "$tool_name" "$source/tools-present"; then
+        install -m 0755 "$source/tools/$tool_name" "$stage_tools/$tool_name"
+      fi
+    done
+    chmod 0600 "$old_tools/tools-present"
+  fi
   restore_failed() {
     local status=$?
     trap - ERR
@@ -188,9 +261,17 @@ restore_snapshot() {
     [[ -d $old_config ]] && mv "$old_config" "$CONFIG_DIR"
     [[ -d $old_binary ]] && mv "$old_binary" "$BINARY_DIR"
     [[ -f $old_service ]] && install -m 0644 "$old_service" "$SERVICE_FILE"
+    if [[ $restore_tools == true ]]; then
+      for tool_name in "${TOOL_NAMES[@]}"; do
+        rm -f -- "$TOOLS_DIR/$tool_name"
+        if grep -Fxq "$tool_name" "$old_tools/tools-present" 2>/dev/null; then
+          install -m 0755 "$old_tools/tools/$tool_name" "$TOOLS_DIR/$tool_name"
+        fi
+      done
+    fi
     systemctl daemon-reload
     systemctl restart "$SERVICE" >/dev/null 2>&1
-    rm -rf -- "$stage_config" "$stage_binary"
+    rm -rf -- "$stage_config" "$stage_binary" "${stage_tools:-}" "$old_tools"
     printf '快照恢复失败，已尝试放回恢复前文件。\n' >&2
     exit "$status"
   }
@@ -201,6 +282,16 @@ restore_snapshot() {
   mv "$stage_config" "$CONFIG_DIR"
   mv "$stage_binary" "$BINARY_DIR"
   install -m 0644 "$source/gost-socks.service" "$SERVICE_FILE"
+  if [[ $restore_tools == true ]]; then
+    install -d -m 0755 "$TOOLS_DIR"
+    for tool_name in "${TOOL_NAMES[@]}"; do
+      if grep -Fxq "$tool_name" "$source/tools-present"; then
+        install -m 0755 "$stage_tools/$tool_name" "$TOOLS_DIR/$tool_name"
+      else
+        rm -f -- "$TOOLS_DIR/$tool_name"
+      fi
+    done
+  fi
   systemctl daemon-reload
   if [[ $(cat "$source/enabled-state" 2>/dev/null || true) == enabled ]]; then
     systemctl enable "$SERVICE" >/dev/null
@@ -209,13 +300,17 @@ restore_snapshot() {
   fi
   if [[ $(cat "$source/active-state" 2>/dev/null || true) == active ]]; then
     systemctl restart "$SERVICE"
-    systemctl is-active --quiet "$SERVICE"
+    if ! wait_for_service_ready; then
+      printf '恢复后的服务未在 15 秒内监听原端口。\n' >&2
+      false
+    fi
   else
     systemctl stop "$SERVICE" >/dev/null 2>&1 || true
   fi
   trap - ERR
   rm -rf -- "$old_config" "$old_binary"
   rm -f -- "$old_service"
+  rm -rf -- "${stage_tools:-}" "$old_tools"
   printf '已恢复快照：%s\n' "$source"
 }
 

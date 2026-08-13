@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
-readonly TOOL_VERSION_CURRENT="1.9.1"
+readonly TOOL_VERSION_CURRENT="1.9.2"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -73,7 +73,7 @@ done
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.9.1 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.9.2 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
@@ -381,10 +381,18 @@ systemctl enable gost-socks.service
 if ! systemctl restart gost-socks.service; then
   install_rollback "$LINENO" 1 INSTALL_SERVICE_FAILED systemd-restart-failed
 fi
-sleep 1
-if ! systemctl is-active --quiet gost-socks.service; then
+service_ready=false
+for ((startup_attempt=1; startup_attempt<=15; startup_attempt++)); do
+  if systemctl is-active --quiet gost-socks.service \
+     && ss -H -lnt | awk -v port=":$port" '$4 ~ port "$" {found=1} END {exit !found}'; then
+    service_ready=true
+    break
+  fi
+  (( startup_attempt == 15 )) || sleep 1
+done
+if [[ $service_ready != true ]]; then
   systemctl --no-pager --full status gost-socks.service || true
-  install_rollback "$LINENO" 1 INSTALL_SERVICE_FAILED service-not-active
+  install_rollback "$LINENO" 1 INSTALL_SERVICE_NOT_READY "port-$port-not-ready-after-15-attempts"
 fi
 
 doctor_status=0

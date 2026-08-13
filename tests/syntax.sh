@@ -51,7 +51,7 @@ grep -q "remote_dir/scripts" "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.9.1"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.9.2"' "$project_dir/install.sh"
 grep -q 'control_source="$script_dir/scripts/socksctl"' "$project_dir/install.sh"
 if grep -q 'control_source="$script_dir/socksctl"' "$project_dir/install.sh"; then
   printf '安装器仍可能优先使用根目录遗留的旧 socksctl。\n' >&2
@@ -81,6 +81,14 @@ grep -q 'socks-upgrade' "$project_dir/uninstall.sh"
 grep -q '安全跳过' "$project_dir/install.sh"
 grep -q 'gost-socks-main.lock' "$project_dir/install.sh"
 grep -q 'INSTALL_UNKNOWN' "$project_dir/install.sh"
+grep -q 'INSTALL_SERVICE_NOT_READY' "$project_dir/install.sh"
+grep -q 'startup_attempt<=15' "$project_dir/install.sh"
+grep -q 'tools-present' "$project_dir/scripts/socks-safety"
+grep -q 'wait_for_service_ready' "$project_dir/scripts/socks-safety"
+if grep -q 'chmod -R go-rwx' "$project_dir/scripts/socks-safety"; then
+  printf '快照模块不得递归移除 GOST 服务用户所需的执行权限。\n' >&2
+  exit 1
+fi
 grep -q 'HEAL_BLOCKED_UNCERTAIN' "$project_dir/scripts/socksctl"
 grep -q 'CONFIG_MISSING|CONFIG_PERMISSION|CONFIG_MISMATCH' "$project_dir/scripts/socksctl"
 grep -q 'PORT_CONFLICT' "$project_dir/scripts/socks-doctor"
@@ -249,7 +257,8 @@ redaction_output=$(printf '%s\n' "$redaction_input" \
 
 safety_test_dir=$(mktemp -d)
 mkdir -p "$safety_test_dir/fakebin" "$safety_test_dir/etc/gost-socks" \
-  "$safety_test_dir/usr/local/lib/gost-socks" "$safety_test_dir/systemd"
+  "$safety_test_dir/usr/local/lib/gost-socks" "$safety_test_dir/usr/local/sbin" \
+  "$safety_test_dir/systemd"
 cat >"$safety_test_dir/fakebin/systemctl" <<'EOF'
 #!/usr/bin/env bash
 case "${1:-}" in
@@ -258,7 +267,16 @@ case "${1:-}" in
 esac
 exit 0
 EOF
-chmod +x "$safety_test_dir/fakebin/systemctl"
+cat >"$safety_test_dir/fakebin/ss" <<'EOF'
+#!/usr/bin/env bash
+counter_file=${SOCKS_TEST_SS_COUNTER:?}
+counter=$(cat "$counter_file" 2>/dev/null || printf '0')
+counter=$((counter + 1))
+printf '%s\n' "$counter" >"$counter_file"
+(( counter >= 2 )) || exit 0
+printf 'LISTEN 0 4096 0.0.0.0:31080 0.0.0.0:*\n'
+EOF
+chmod +x "$safety_test_dir/fakebin/systemctl" "$safety_test_dir/fakebin/ss"
 cat >"$safety_test_dir/etc/gost-socks/node.env" <<'EOF'
 NODE_NAME=old
 PUBLIC_IP=203.0.113.10
@@ -276,24 +294,46 @@ services:
         password: "0123456789abcdef0123456789abcdef"
 EOF
 printf 'binary-old\n' >"$safety_test_dir/usr/local/lib/gost-socks/gost"
-chmod +x "$safety_test_dir/usr/local/lib/gost-socks/gost"
+chmod 0755 "$safety_test_dir/usr/local/lib/gost-socks" \
+  "$safety_test_dir/usr/local/lib/gost-socks/gost"
+for safety_tool in socksctl socks-uninstall socks-doctor socks-safety socks-refresh-ip socks-upgrade; do
+  printf 'old-%s\n' "$safety_tool" >"$safety_test_dir/usr/local/sbin/$safety_tool"
+  chmod 0755 "$safety_test_dir/usr/local/sbin/$safety_tool"
+done
 printf 'ExecStart=/fake/gost\n' >"$safety_test_dir/systemd/gost-socks.service"
 safety_command=(env PATH="$safety_test_dir/fakebin:$PATH" \
+  SOCKS_TEST_SS_COUNTER="$safety_test_dir/ss-counter" \
   SOCKS_SAFETY_ROOT="$safety_test_dir/state" \
   SOCKS_CONFIG_DIR="$safety_test_dir/etc/gost-socks" \
   SOCKS_BINARY_DIR="$safety_test_dir/usr/local/lib/gost-socks" \
   SOCKS_SERVICE_FILE="$safety_test_dir/systemd/gost-socks.service" \
+  SOCKS_TOOLS_DIR="$safety_test_dir/usr/local/sbin" \
   "$project_dir/scripts/socks-safety")
 transaction_snapshot=$("${safety_command[@]}" snapshot)
 "${safety_command[@]}" verify "$transaction_snapshot" | grep -Fq '快照校验通过'
+find "$transaction_snapshot/binary" -maxdepth 0 -perm -001 | grep -Fq '/binary'
+find "$transaction_snapshot/binary/gost" -maxdepth 0 -perm -001 | grep -Fq '/gost'
+grep -Fxq 'socksctl' "$transaction_snapshot/tools-present"
+grep -Fq 'old-socksctl' "$transaction_snapshot/tools/socksctl"
 sed -i.bak 's/NODE_NAME=old/NODE_NAME=new/' "$safety_test_dir/etc/gost-socks/node.env"
 rm -f -- "$safety_test_dir/etc/gost-socks/node.env.bak"
+printf 'new-socksctl\n' >"$safety_test_dir/usr/local/sbin/socksctl"
+chmod 0755 "$safety_test_dir/usr/local/sbin/socksctl"
 "${safety_command[@]}" promote "$transaction_snapshot" >/dev/null
 grep -Fq 'NODE_NAME=old' "$safety_test_dir/state/snapshots/previous-good/config/node.env"
 grep -Fq 'NODE_NAME=new' "$safety_test_dir/state/snapshots/last-good/config/node.env"
+# 模拟 v1.9.1 把快照目录和二进制错误收紧为 0700；内容校验仍有效，恢复必须兼容纠正权限。
+chmod 0700 "$safety_test_dir/state/snapshots/previous-good/binary" \
+  "$safety_test_dir/state/snapshots/previous-good/binary/gost"
 printf 'broken\n' >"$safety_test_dir/etc/gost-socks/node.env"
 "${safety_command[@]}" restore "$safety_test_dir/state/snapshots/previous-good" >/dev/null
+[[ $(cat "$safety_test_dir/ss-counter") == 2 ]]
 grep -Fq 'NODE_NAME=old' "$safety_test_dir/etc/gost-socks/node.env"
+grep -Fq 'old-socksctl' "$safety_test_dir/usr/local/sbin/socksctl"
+find "$safety_test_dir/usr/local/lib/gost-socks" -maxdepth 0 -perm -001 | grep -Fq 'gost-socks'
+find "$safety_test_dir/usr/local/lib/gost-socks/gost" -maxdepth 0 -perm -001 | grep -Fq '/gost'
+find "$safety_test_dir/etc/gost-socks" -maxdepth 0 -perm -010 | grep -Fq 'gost-socks'
+find "$safety_test_dir/usr/local/sbin/socksctl" -maxdepth 0 -perm -001 | grep -Fq 'socksctl'
 "${safety_command[@]}" snapshots | grep -Fq 'previous-good'
 "${safety_command[@]}" recovery-guard CONFIG_MISSING
 "${safety_command[@]}" recovery-mark CONFIG_MISSING
