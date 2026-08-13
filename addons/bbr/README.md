@@ -1,6 +1,6 @@
 # 可选 BBR + FQ 加速插件
 
-插件版本：`1.1.0`
+插件版本：`1.1.1`
 
 主程序兼容范围：`v1.4.0` 至所有 `v1.x` 版本；不承诺兼容未来 `v2.x`。
 
@@ -58,12 +58,16 @@ bbrctl health
 bbrctl restore
 ```
 
+根据提示输入 `RESTORE-BBR`；非交互环境会停止，不会直接改动网络设置。
+
 恢复并卸载插件：
 
 ```bash
 cd /root/socks5-toolkit/addons/bbr
 bash uninstall.sh
 ```
+
+根据提示输入 `UNINSTALL-BBR`。卸载会先恢复原设置，恢复失败时不会继续删除插件。
 
 卸载不会触碰 GOST、SOCKS5 凭据、端口、安全组或 sing-box 备份。
 

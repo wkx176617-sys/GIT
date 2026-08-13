@@ -16,7 +16,7 @@ usage() {
   health    检查实际设置、持久配置和配置冲突（只读）
   enable    保存当前设置并启用 BBR + FQ
   repair    持久配置存在但失效时重新应用
-  restore   恢复首次启用前的设置
+  restore [--yes]  恢复首次启用前的设置；默认需要输入确认口令
 EOF
 }
 
@@ -116,6 +116,11 @@ require_no_conflicts() {
 
 command_name=${1:-help}
 shift || true
+confirmed=false
+if [[ $command_name == restore && ${1:-} == --yes ]]; then
+  confirmed=true
+  shift
+fi
 [[ $# -eq 0 ]] || die "命令不接受额外参数"
 
 case "$command_name" in
@@ -224,6 +229,12 @@ EOF
        && $(read_sysctl net.ipv4.tcp_congestion_control) == "$ORIGINAL_CC" ]]; then
       printf '当前已经是首次启用前的设置；重复 restore 已安全跳过。\n'
       exit 0
+    fi
+    if [[ $confirmed != true ]]; then
+      [[ -t 0 ]] || die "恢复网络设置必须在交互式 SSH/Xshell 窗口中确认"
+      printf '恢复会删除插件配置并切回首次启用前的网络设置。输入 RESTORE-BBR 确认：'
+      read -r restore_answer
+      [[ $restore_answer == RESTORE-BBR ]] || die "已取消恢复"
     fi
     rm -f -- "$SYSCTL_FILE"
     sysctl -w "net.core.default_qdisc=$ORIGINAL_QDISC" >/dev/null

@@ -34,7 +34,7 @@ grep -Fq '[客户端导入与网络验收](docs/clients.md)' README.md \
   || { printf 'README 未提供客户端专用入口\n' >&2; exit 1; }
 grep -Fq '[安全升级到指定版本](docs/upgrade.md)' README.md \
   || { printf 'README 未提供独立安全升级入口\n' >&2; exit 1; }
-grep -Fq 'socks-upgrade --check' docs/upgrade.md \
+grep -Fq 'socksctl upgrade --check' docs/upgrade.md \
   && grep -Fq '智能安装 / 升级路线' docs/upgrade.md \
   || { printf '升级专题缺少只读检查或现状未知分流\n' >&2; exit 1; }
 grep -Fq 'socksctl export' docs/clients.md && grep -Fq 'socksctl qr shadowrocket' docs/clients.md \
@@ -119,6 +119,13 @@ while IFS= read -r existing_tag; do
 done < <(git tag --list 'v*' --sort=version:refname)
 
 bash tests/syntax.sh
+bash tests/upgrade-flow.sh
+
+grep -Fq 'shellcheck --severity=error' .github/workflows/validate.yml \
+  || { printf 'GitHub Actions 缺少强制 ShellCheck\n' >&2; exit 1; }
+grep -Fq 'gh release create' .github/workflows/validate.yml \
+  && grep -Fq 'needs: validate' .github/workflows/validate.yml \
+  || { printf '标签工作流缺少校验后的 GitHub Release 创建步骤\n' >&2; exit 1; }
 
 for route_file in docs/tutorial.md docs/macos.md docs/windows-xshell.md; do
   route_lines=$(wc -l <"$route_file")
@@ -134,6 +141,10 @@ if rg -n 'socksctl[[:space:]]+qr|bbrctl[[:space:]]+(enable|repair|restore)' \
 fi
 if rg -n 'git[[:space:]]+clone|xshell-install\.sh|\./deploy\.sh' docs/tutorial.md; then
   printf '第一次搭建总路线重复了平台安装命令，应只链接平台专题\n' >&2
+  exit 1
+fi
+if rg -n 'git[[:space:]]+clone|xshell-install\.sh[[:space:]]+--port|\./deploy\.sh[[:space:]]+root@' README.md; then
+  printf 'README 重复了平台安装命令，应只链接唯一平台专题\n' >&2
   exit 1
 fi
 if rg -n 'socks-upgrade[[:space:]]+(--check|v[0-9])' \

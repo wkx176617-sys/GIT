@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
-readonly TOOL_VERSION_CURRENT="1.9.0"
+readonly TOOL_VERSION_CURRENT="1.9.1"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -24,6 +24,7 @@ usage() {
 
 节点名称默认使用 VPS 公网 IP。用户名和密码会在首次安装时自动生成。
 重复安装会保留已有名称和凭据；特殊情况下可以使用 --name 自定义。
+--allow-downgrade 仅供按版本说明执行的高级人工回退，不属于日常升级路径。
 EOF
 }
 
@@ -72,7 +73,7 @@ done
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.9.0 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.9.1 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
@@ -255,6 +256,7 @@ download_url="https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}
 
 printf '下载 GOST %s (%s)...\n' "$GOST_VERSION" "$asset_arch"
 curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+  --connect-timeout 10 --max-time 120 \
   "$download_url" --output "$tmp_dir/$archive"
 
 actual_sha=$(sha256sum "$tmp_dir/$archive" | awk '{print $1}')

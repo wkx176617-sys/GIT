@@ -7,14 +7,18 @@ readonly CONFIG_DIR="${SOCKS_CONFIG_DIR:-$DEFAULT_CONFIG_DIR}"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
 readonly SERVICE_FILE="${SOCKS_SERVICE_FILE:-$DEFAULT_SERVICE_FILE}"
 readonly REPOSITORY_URL="${SOCKS_REPOSITORY_URL:-https://github.com/wkx176617-sys/GIT.git}"
-readonly LOCK_FILE="${SOCKS_LOCK_FILE:-/run/lock/gost-socks-main.lock}"
+readonly DEFAULT_LOCK_FILE="/run/lock/gost-socks-main.lock"
+readonly LOCK_FILE="${SOCKS_LOCK_FILE:-$DEFAULT_LOCK_FILE}"
+readonly TAG_CHECK_TIMEOUT_SECONDS="${SOCKS_TAG_CHECK_TIMEOUT_SECONDS:-20}"
+readonly CLONE_TIMEOUT_SECONDS="${SOCKS_CLONE_TIMEOUT_SECONDS:-120}"
+readonly TIMEOUT_BIN="${SOCKS_TIMEOUT_BIN:-timeout}"
 
 usage() {
   cat <<'EOF'
 用法：
   sudo socks-upgrade --current
-  sudo socks-upgrade --check v1.9.0
-  sudo socks-upgrade v1.9.0
+  sudo socks-upgrade --check v1.9.1
+  sudo socks-upgrade v1.9.1
 
 只升级已经由本项目管理的 GOST SOCKS5 节点。不会用于首次安装、降级或迁移其他代理。
 --check 只读检查本机状态和目标标签，不修改服务、配置或凭据。
@@ -65,7 +69,7 @@ validate_existing_node() {
 
 validate_target() {
   [[ $target_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-    || die "目标必须是完整稳定标签，例如 v1.9.0；不接受 main、latest 或省略版本号"
+    || die "目标必须是完整稳定标签，例如 v1.9.1；不接受 main、latest 或省略版本号"
   target_version=${target_tag#v}
   if [[ $current_version == "$target_version" ]]; then
     die "当前已经是 ${target_tag}，无需重复升级"
@@ -77,10 +81,16 @@ validate_target() {
 
 check_remote_tag() {
   command -v git >/dev/null 2>&1 || die "缺少 git；请先运行 apt-get update && apt-get install -y git ca-certificates"
-  remote_commit=$(git ls-remote --tags "$REPOSITORY_URL" \
-    "refs/tags/$target_tag" "refs/tags/$target_tag^{}" \
-    | awk -v ref="refs/tags/$target_tag" \
-      '$2 == ref {direct=$1} $2 == ref "^{}" {peeled=$1} END {print peeled ? peeled : direct}')
+  command -v "$TIMEOUT_BIN" >/dev/null 2>&1 \
+    || die "缺少 timeout（coreutils）；请先运行 apt-get install -y coreutils"
+  local remote_output
+  if ! remote_output=$(GIT_TERMINAL_PROMPT=0 "$TIMEOUT_BIN" --signal=TERM \
+    "$TAG_CHECK_TIMEOUT_SECONDS" git ls-remote --tags "$REPOSITORY_URL" \
+    "refs/tags/$target_tag" "refs/tags/$target_tag^{}" 2>/dev/null); then
+    die "查询稳定标签超时或失败；没有修改服务器，请检查网络后重试"
+  fi
+  remote_commit=$(printf '%s\n' "$remote_output" | awk -v ref="refs/tags/$target_tag" \
+    '$2 == ref {direct=$1} $2 == ref "^{}" {peeled=$1} END {print peeled ? peeled : direct}')
   [[ $remote_commit =~ ^[0-9a-f]{40}$ ]] \
     || die "GitHub 上没有找到稳定标签 ${target_tag}，或服务器暂时无法访问 GitHub"
 }
@@ -92,7 +102,7 @@ case "${1:-}" in
     action=current
     ;;
   --check)
-    [[ $# -eq 2 ]] || die "用法：socks-upgrade --check v1.9.0"
+    [[ $# -eq 2 ]] || die "用法：socks-upgrade --check v1.9.1"
     target_tag=$2
     action=check
     check_only=true
@@ -104,11 +114,18 @@ case "${1:-}" in
     check_only=false
     ;;
   "") usage; exit 1 ;;
-  *) die "无法识别参数。目标必须像 v1.9.0" ;;
+  *) die "无法识别参数。目标必须像 v1.9.1" ;;
 esac
 
-if [[ $action == upgrade || $CONFIG_DIR == "$DEFAULT_CONFIG_DIR" \
-   || $SERVICE_FILE == "$DEFAULT_SERVICE_FILE" ]]; then
+[[ $TAG_CHECK_TIMEOUT_SECONDS =~ ^[0-9]+$ && $TAG_CHECK_TIMEOUT_SECONDS -ge 1 \
+   && $TAG_CHECK_TIMEOUT_SECONDS -le 600 ]] || die "标签查询超时必须为 1-600 秒"
+[[ $CLONE_TIMEOUT_SECONDS =~ ^[0-9]+$ && $CLONE_TIMEOUT_SECONDS -ge 1 \
+   && $CLONE_TIMEOUT_SECONDS -le 600 ]] || die "版本下载超时必须为 1-600 秒"
+
+uses_system_paths=false
+if [[ $CONFIG_DIR == "$DEFAULT_CONFIG_DIR" || $SERVICE_FILE == "$DEFAULT_SERVICE_FILE" \
+   || $LOCK_FILE == "$DEFAULT_LOCK_FILE" ]]; then
+  uses_system_paths=true
   require_root
 fi
 validate_existing_node
@@ -132,7 +149,9 @@ printf '  账号密码：保留，不在此处显示\n'
 printf '  目标标签：GitHub 已找到\n'
 [[ $check_only == false ]] || { printf '只读检查结束，没有修改服务器。\n'; exit 0; }
 
-[[ -t 0 ]] || die "正式升级必须在交互式 SSH/Xshell 窗口中确认"
+if [[ $uses_system_paths == true ]]; then
+  [[ -t 0 ]] || die "正式升级必须在交互式 SSH/Xshell 窗口中确认"
+fi
 printf '输入 UPGRADE-%s 确认升级：' "$target_tag"
 read -r answer
 [[ $answer == "UPGRADE-$target_tag" ]] || { printf '已取消，没有修改服务器。\n'; exit 0; }
@@ -155,7 +174,10 @@ tmp_dir=$(mktemp -d)
 cleanup() { rm -rf -- "$tmp_dir"; }
 trap cleanup EXIT
 printf '正在下载稳定版 %s...\n' "$target_tag"
-git clone --quiet --branch "$target_tag" --depth 1 "$REPOSITORY_URL" "$tmp_dir/package"
+if ! GIT_TERMINAL_PROMPT=0 "$TIMEOUT_BIN" --signal=TERM "$CLONE_TIMEOUT_SECONDS" \
+  git clone --quiet --branch "$target_tag" --depth 1 "$REPOSITORY_URL" "$tmp_dir/package"; then
+  die "下载稳定版超时或失败；没有开始安装，请检查网络后重试"
+fi
 downloaded_commit=$(git -C "$tmp_dir/package" rev-parse HEAD 2>/dev/null || true)
 [[ $downloaded_commit == "$remote_commit" ]] \
   || die "下载的标签指向发生变化；没有执行升级，请人工检查远端标签"

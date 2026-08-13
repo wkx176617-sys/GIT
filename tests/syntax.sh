@@ -19,6 +19,7 @@ files=(
   "$project_dir/addons/bbr/bbrctl"
   "$project_dir/addons/bbr/install.sh"
   "$project_dir/addons/bbr/uninstall.sh"
+  "$project_dir/tests/upgrade-flow.sh"
 )
 
 for file in "${files[@]}"; do
@@ -50,7 +51,7 @@ grep -q "remote_dir/scripts" "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.9.0"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.9.1"' "$project_dir/install.sh"
 grep -q 'control_source="$script_dir/scripts/socksctl"' "$project_dir/install.sh"
 if grep -q 'control_source="$script_dir/socksctl"' "$project_dir/install.sh"; then
   printf '安装器仍可能优先使用根目录遗留的旧 socksctl。\n' >&2
@@ -69,6 +70,9 @@ grep -q '升级命令禁止降级' "$project_dir/scripts/socks-upgrade"
 grep -q '没有发现本项目节点' "$project_dir/scripts/socks-upgrade"
 grep -q 'UPGRADE-%s' "$project_dir/scripts/socks-upgrade"
 grep -q 'git ls-remote --tags' "$project_dir/scripts/socks-upgrade"
+grep -q 'TAG_CHECK_TIMEOUT_SECONDS' "$project_dir/scripts/socks-upgrade"
+grep -q 'CLONE_TIMEOUT_SECONDS' "$project_dir/scripts/socks-upgrade"
+grep -q -- '--connect-timeout 10 --max-time 120' "$project_dir/install.sh"
 grep -q 'SOCKS_LOCK_HELD=1 bash' "$project_dir/scripts/socks-upgrade"
 grep -q -- '--preserve-node' "$project_dir/scripts/socks-upgrade"
 grep -q 'INSTALL_PRESERVATION_FAILED' "$project_dir/install.sh"
@@ -102,7 +106,7 @@ grep -q '20.04|22.04|24.04' "$project_dir/preflight.sh"
 grep -q '/root/gost-socks-backups' "$project_dir/overwrite.sh"
 grep -q 'systemctl disable --now sing-box' "$project_dir/overwrite.sh"
 grep -q 'trap rollback ERR' "$project_dir/overwrite.sh"
-grep -q '^PLUGIN_VERSION=1.1.0$' "$project_dir/addons/bbr/plugin.conf"
+grep -q '^PLUGIN_VERSION=1.1.1$' "$project_dir/addons/bbr/plugin.conf"
 grep -q '^MAIN_MIN_VERSION=1.4.0$' "$project_dir/addons/bbr/plugin.conf"
 grep -q '^MAIN_MAX_MAJOR=1$' "$project_dir/addons/bbr/plugin.conf"
 grep -q 'net.ipv4.tcp_congestion_control = bbr' "$project_dir/addons/bbr/bbrctl"
@@ -110,6 +114,8 @@ grep -q 'net.core.default_qdisc = fq' "$project_dir/addons/bbr/bbrctl"
 grep -q 'trap rollback_enable ERR' "$project_dir/addons/bbr/bbrctl"
 grep -q '重复 enable 已安全跳过' "$project_dir/addons/bbr/bbrctl"
 grep -q 'find_conflicts' "$project_dir/addons/bbr/bbrctl"
+grep -q '输入 RESTORE-BBR 确认' "$project_dir/addons/bbr/bbrctl"
+grep -q '输入 UNINSTALL-BBR 确认' "$project_dir/addons/bbr/uninstall.sh"
 if rg -n 'bbrctl|addons/bbr|tcp_congestion_control' \
   "$project_dir/deploy.sh" "$project_dir/install.sh" "$project_dir/xshell-install.sh" \
   "$project_dir/preflight.sh" "$project_dir/overwrite.sh" "$project_dir/scripts/socksctl"; then
@@ -128,7 +134,15 @@ fi
 upgrade_test_dir=$(mktemp -d)
 upgrade_config_dir="$upgrade_test_dir/config"
 upgrade_service_file="$upgrade_test_dir/gost-socks.service"
+upgrade_timeout_wrapper="$upgrade_test_dir/timeout"
 mkdir -p "$upgrade_config_dir"
+cat >"$upgrade_timeout_wrapper" <<'EOF'
+#!/usr/bin/env bash
+[[ ${1:-} == --signal=TERM ]] && shift
+shift
+exec "$@"
+EOF
+chmod +x "$upgrade_timeout_wrapper"
 
 write_upgrade_fixture() {
   local fixture_version=$1
@@ -151,6 +165,7 @@ upgrade_env=(
   "SOCKS_SERVICE_FILE=$upgrade_service_file"
   "SOCKS_REPOSITORY_URL=$project_dir"
   "SOCKS_LOCK_FILE=$upgrade_test_dir/upgrade.lock"
+  "SOCKS_TIMEOUT_BIN=$upgrade_timeout_wrapper"
 )
 
 expect_upgrade_failure() {
@@ -194,6 +209,7 @@ missing_env=(
   "SOCKS_CONFIG_DIR=$upgrade_test_dir/empty-config"
   "SOCKS_SERVICE_FILE=$upgrade_service_file"
   "SOCKS_REPOSITORY_URL=$project_dir"
+  "SOCKS_LOCK_FILE=$upgrade_test_dir/missing.lock"
 )
 if missing_output=$(env "${missing_env[@]}" "$project_dir/scripts/socks-upgrade" --current 2>&1); then
   printf '升级器不应把空目录识别为本项目节点。\n' >&2
@@ -359,8 +375,20 @@ if [[ -n $unexpected_ips ]]; then
   printf '检测到不属于文档示例网段的 IPv4：\n%s\n' "$unexpected_ips" >&2
   exit 1
 fi
-if grep -R -nE 'SOCKS_PASSWORD=[^$]' "$project_dir" --exclude-dir=.git --exclude='syntax.sh'; then
+if grep -R -nE 'SOCKS_PASSWORD=[^$]' "$project_dir" --exclude-dir=.git \
+  --exclude='syntax.sh' --exclude='upgrade-flow.sh'; then
   printf '检测到仓库文件写入明文节点密码。\n' >&2
+  exit 1
+fi
+if grep -R -nE 'BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-(proj-)?[A-Za-z0-9_-]{20,}|sk_live_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|AIza[0-9A-Za-z_-]{30,}|AKIA[0-9A-Z]{16}|socks5?://[A-Za-z0-9._-]{4,32}:[A-Za-z0-9._-]{16,64}@' \
+  "$project_dir" --exclude-dir=.git --exclude='syntax.sh' --exclude='upgrade-flow.sh'; then
+  printf '检测到疑似私钥、Token 或带真实凭据的代理链接。\n' >&2
+  exit 1
+fi
+sensitive_key_files=$(find "$project_dir" -path "$project_dir/.git" -prune -o -type f \
+  \( -name '*.pem' -o -name '*.key' -o -name 'id_rsa' -o -name 'id_ed25519' \) -print)
+if [[ -n $sensitive_key_files ]]; then
+  printf '检测到不应进入仓库的私钥文件名：\n%s\n' "$sensitive_key_files" >&2
   exit 1
 fi
 

@@ -39,8 +39,8 @@ ssh root@你的VPS公网IP
 
 ```bash
 cd "$HOME/Desktop"
-git clone --branch v1.9.0 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.9.0
-cd "$HOME/Desktop/socks5-toolkit-v1.9.0"
+git clone --branch v1.9.1 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.9.1
+cd "$HOME/Desktop/socks5-toolkit-v1.9.1"
 ./deploy.sh root@你的VPS公网IP --port 31080
 ```
 
