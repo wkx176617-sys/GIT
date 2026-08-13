@@ -9,6 +9,7 @@
 | Mac部署 | `deploy.sh` | 核心入口 | 否 | SSH、SCP | 参数和帮助测试 |
 | Xshell部署 | `xshell-install.sh` | 核心入口 | 否 | Ubuntu基础命令 | 错误参数拦截 |
 | 安装升级 | `install.sh` | 核心 | 否 | systemd、curl、基础工具 | 版本、锁、服务边界 |
+| 指定版本升级 | `scripts/socks-upgrade` | 生命周期模块 | 否 | git、install | 身份、版本、确认、验收 |
 | 旧节点质检 | `preflight.sh` | 核心只读 | 否 | systemd、ss | 镜像和端口分类 |
 | 受控迁移 | `overwrite.sh` | 兼容模块 | 否 | install、旧sing-box | 备份和回退标记 |
 | 日常入口 | `scripts/socksctl` | 核心接口 | 否 | doctor、safety | 导出、白名单、菜单 |
@@ -42,6 +43,7 @@
 | `docs/change-public-ip.md` | 同一台VPS只更换公网IP的安全流程 |
 | `docs/mobile-network-check.md` | 手机Wi-Fi、流量、VPN和客户端出口检查 |
 | `docs/bitbrowser-fail-closed.md` | 比特浏览器网络错误停止、白名单和破坏性验收 |
+| `docs/upgrade.md` | 已有本项目节点升级到指定稳定版本的唯一教程 |
 | `docs/visual-style.md` | GitHub公开界面的配色、层级、文案和图片预算 |
 | `docs/troubleshooting.md` | 故障检查、恢复边界和Codex提问模板 |
 | `docs/project-principles.md` | 宗旨、性能预算和功能准入规则 |
@@ -55,6 +57,7 @@
 - Mac连接或本地部署错误：先看 `deploy.sh` 和 macOS教程。
 - 客户端导入、二维码或浏览器验收：只改客户端专题，不复制到平台教程。
 - VPS公网IP替换：改 `socks-refresh-ip` 和换IP专题，不并入安装器。
+- 已有本项目节点指定版本升级：改 `socks-upgrade` 和升级专题，不复制到平台教程。
 - 服务、端口、资源或线路检测：改 `socks-doctor`，不要写入安装器。
 - 快照、事件、校验、熔断：改 `socks-safety`，不要让 `socksctl` 自己保存状态。
 - 用户命令和菜单：改 `socksctl`，复杂实现应下沉到对应模块。

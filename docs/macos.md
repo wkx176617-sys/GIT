@@ -39,8 +39,8 @@ ssh root@你的VPS公网IP
 
 ```bash
 cd "$HOME/Desktop"
-git clone --branch v1.8.1 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.8.1
-cd "$HOME/Desktop/socks5-toolkit-v1.8.1"
+git clone --branch v1.9.0 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.9.0
+cd "$HOME/Desktop/socks5-toolkit-v1.9.0"
 ./deploy.sh root@你的VPS公网IP --port 31080
 ```
 
@@ -77,16 +77,8 @@ Mac 不需要长期保留本项目文件夹，也不需要保存本地节点清�
 
 ## 可选情况：升级稳定版本
 
-阅读对应版本说明后，在 Mac 项目目录逐行运行：
-
-```bash
-cd "$HOME/Desktop"
-git clone --branch 新版本标签 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-新版本标签
-cd "$HOME/Desktop/socks5-toolkit-新版本标签"
-./deploy.sh root@你的VPS公网IP --port 31080
-```
-
-不要部署 `main`，不要使用 `git reset --hard`。健康且参数相同时会安全跳过不必要的覆写。
+不要重复这里的部署步骤。SSH登录服务器后，统一按照[安全升级到指定版本](upgrade.md)操作。
+升级器只接受已有本项目节点，不会把其他代理当成本项目覆写。
 
 ## 连接问题
 

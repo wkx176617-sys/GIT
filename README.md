@@ -6,7 +6,7 @@
 
 **给第一次接触服务器的你，一条轻盈、清楚、可以回头的搭建路线。**
 
-[![stable v1.8.1](https://img.shields.io/badge/stable-v1.8.1-E5B8BE?style=flat-square)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.8.1)
+[![stable v1.9.0](https://img.shields.io/badge/stable-v1.9.0-E5B8BE?style=flat-square)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.9.0)
 [![checks](https://img.shields.io/github/actions/workflow/status/wkx176617-sys/GIT/validate.yml?label=checks&style=flat-square&labelColor=F3E8E4&color=A9B8A1)](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04_·_22.04_·_24.04-C98F96?style=flat-square)](docs/tutorial.md)
 [![GOST](https://img.shields.io/badge/GOST-3.2.6-A9B8A1?style=flat-square)](https://github.com/go-gost/gost/releases/tag/v3.2.6)
@@ -15,7 +15,7 @@
 
 </div>
 
-> 当前推荐稳定版本：`v1.8.1`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
+> 当前推荐稳定版本：`v1.9.0`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
 
 每台 Ubuntu VPS 运行一个轻量 GOST SOCKS5 节点，默认使用 `31080/TCP`。Mac 或 Windows
 只负责连接服务器和使用浏览器，不需要运行本项目后台服务。
@@ -29,13 +29,14 @@
 
 ## 开始搭建
 
-第一次使用时，只选择与你电脑对应的一条路线。
+先按自己的真实情况选择一个入口；不确定时选择第一条，不要猜测服务器状态。
 
-| 我使用的电脑 | 从这里开始 | 你会完成什么 |
+| 我的情况 | 唯一入口 | 程序会做什么 |
 |---|---|---|
-| Mac | [macOS 部署指南](docs/macos.md) | Terminal、SSH、部署和下一步 |
-| Windows | [Windows + Xshell 教程](docs/windows-xshell.md) | Xshell 登录、安装和下一步 |
-| 还不知道选什么 | [第一次搭建总路线](docs/tutorial.md) | 从 VPS 准备到客户端验收 |
+| 不知道是否搭建过 | [智能安装 / 升级路线](docs/tutorial.md) | 先质检；全新安装或安全兼容升级，未知情况停止 |
+| 已确认是本项目旧版 | [安全升级到指定版本](docs/upgrade.md) | 只升级工具，保留节点信息；不负责首次安装和迁移 |
+
+智能路线会再让你选择 [macOS 部署指南](docs/macos.md) 或 [Windows + Xshell](docs/windows-xshell.md)。
 
 <details>
 <summary><strong>Windows + Xshell 三行安装命令</strong></summary>
@@ -44,8 +45,8 @@ SSH 登录 Ubuntu VPS，看到 `root@...#` 后，每次只复制一行：
 
 ```bash
 apt-get update && apt-get install -y git ca-certificates
-git clone --branch v1.8.1 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.8.1
-bash /root/socks5-toolkit-v1.8.1/xshell-install.sh --port 31080
+git clone --branch v1.9.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.9.0
+bash /root/socks5-toolkit-v1.9.0/xshell-install.sh --port 31080
 ```
 
 </details>
@@ -75,7 +76,9 @@ socksctl guide
 | 想做什么 | 命令 |
 |---|---|
 | 查看节点，隐藏密码 | `socksctl info` |
+| 查看工具版本 | `socks-upgrade --current` |
 | 严格只读诊断 | `socksctl doctor --no-record` |
+| 安全升级指定版本 | [进入升级专题](docs/upgrade.md) |
 | 复制客户端链接 | `socksctl export` |
 | VPS更换公网IP | `socksctl refresh-ip` |
 | 生成脱敏报告 | `socksctl report` |

@@ -66,7 +66,7 @@ for command_name in ssh scp; do
 done
 
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-for required_file in VERSION install.sh uninstall.sh preflight.sh overwrite.sh scripts/socksctl scripts/socks-doctor scripts/socks-safety scripts/socks-refresh-ip; do
+for required_file in VERSION install.sh uninstall.sh preflight.sh overwrite.sh scripts/socksctl scripts/socks-doctor scripts/socks-safety scripts/socks-refresh-ip scripts/socks-upgrade; do
   [[ -f "$project_dir/$required_file" ]] || die "缺少项目文件：$required_file"
 done
 
@@ -83,6 +83,7 @@ scp "$project_dir/VERSION" "$project_dir/install.sh" "$project_dir/uninstall.sh"
   "$project_dir/preflight.sh" "$project_dir/overwrite.sh" "$target:$remote_dir/"
 scp "$project_dir/scripts/socksctl" "$project_dir/scripts/socks-doctor" \
   "$project_dir/scripts/socks-safety" "$project_dir/scripts/socks-refresh-ip" \
+  "$project_dir/scripts/socks-upgrade" \
   "$target:$remote_dir/scripts/"
 
 install_args="--port '$port'"

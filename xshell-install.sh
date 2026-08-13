@@ -26,6 +26,8 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 [[ -f $script_dir/overwrite.sh ]] || die "同目录中缺少 overwrite.sh，请完整下载或上传本项目"
 [[ -f $script_dir/scripts/socks-refresh-ip ]] \
   || die "项目缺少 scripts/socks-refresh-ip，请完整下载或上传本项目"
+[[ -f $script_dir/scripts/socks-upgrade ]] \
+  || die "项目缺少 scripts/socks-upgrade，请完整下载或上传本项目"
 package_version=$(tr -d '[:space:]' <"$script_dir/VERSION")
 installer_version=$(bash "$script_dir/install.sh" --version)
 [[ $package_version == "$installer_version" ]] \

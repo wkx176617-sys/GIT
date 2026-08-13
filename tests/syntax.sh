@@ -14,6 +14,7 @@ files=(
   "$project_dir/scripts/socks-doctor"
   "$project_dir/scripts/socks-safety"
   "$project_dir/scripts/socks-refresh-ip"
+  "$project_dir/scripts/socks-upgrade"
   "$project_dir/scripts/release-check.sh"
   "$project_dir/addons/bbr/bbrctl"
   "$project_dir/addons/bbr/install.sh"
@@ -34,9 +35,14 @@ done
 "$project_dir/scripts/socks-doctor" --help >/dev/null
 "$project_dir/scripts/socks-safety" --help >/dev/null
 "$project_dir/scripts/socks-refresh-ip" --help >/dev/null
+"$project_dir/scripts/socks-upgrade" --help >/dev/null
 "$project_dir/addons/bbr/bbrctl" --help >/dev/null
 "$project_dir/addons/bbr/install.sh" --help >/dev/null
 "$project_dir/addons/bbr/uninstall.sh" --help >/dev/null
+if "$project_dir/install.sh" --help | grep -Fq -- '--preserve-node'; then
+  printf '安装器帮助不应暴露升级器内部的保留模式，避免形成第二条升级路径。\n' >&2
+  exit 1
+fi
 
 grep -q 'port=31080' "$project_dir/deploy.sh"
 grep -q 'VERSION install.sh' "$project_dir/deploy.sh"
@@ -44,7 +50,7 @@ grep -q "remote_dir/scripts" "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.8.1"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.9.0"' "$project_dir/install.sh"
 grep -q 'control_source="$script_dir/scripts/socksctl"' "$project_dir/install.sh"
 if grep -q 'control_source="$script_dir/socksctl"' "$project_dir/install.sh"; then
   printf '安装器仍可能优先使用根目录遗留的旧 socksctl。\n' >&2
@@ -59,6 +65,15 @@ grep -q '输入 REFRESH-IP 确认' "$project_dir/scripts/socks-refresh-ip"
 grep -q 'trap rollback ERR' "$project_dir/scripts/socks-refresh-ip"
 grep -q -- '--check' "$project_dir/scripts/socks-refresh-ip"
 grep -q 'proxy_public_ip' "$project_dir/scripts/socks-refresh-ip"
+grep -q '升级命令禁止降级' "$project_dir/scripts/socks-upgrade"
+grep -q '没有发现本项目节点' "$project_dir/scripts/socks-upgrade"
+grep -q 'UPGRADE-%s' "$project_dir/scripts/socks-upgrade"
+grep -q 'git ls-remote --tags' "$project_dir/scripts/socks-upgrade"
+grep -q 'SOCKS_LOCK_HELD=1 bash' "$project_dir/scripts/socks-upgrade"
+grep -q -- '--preserve-node' "$project_dir/scripts/socks-upgrade"
+grep -q 'INSTALL_PRESERVATION_FAILED' "$project_dir/install.sh"
+grep -q '无法创建升级前事务快照' "$project_dir/install.sh"
+grep -q 'socks-upgrade' "$project_dir/uninstall.sh"
 grep -q '安全跳过' "$project_dir/install.sh"
 grep -q 'gost-socks-main.lock' "$project_dir/install.sh"
 grep -q 'INSTALL_UNKNOWN' "$project_dir/install.sh"
@@ -105,10 +120,87 @@ if rg -n 'crontab|/etc/cron|systemctl[[:space:]]+(enable|start).*\.timer|docker[
   "$project_dir/deploy.sh" "$project_dir/install.sh" "$project_dir/xshell-install.sh" \
   "$project_dir/preflight.sh" "$project_dir/overwrite.sh" "$project_dir/scripts/socksctl" \
   "$project_dir/scripts/socks-doctor" "$project_dir/scripts/socks-safety" \
-  "$project_dir/scripts/socks-refresh-ip"; then
+  "$project_dir/scripts/socks-refresh-ip" "$project_dir/scripts/socks-upgrade"; then
   printf '核心程序引入了定时任务、容器或后台调度，违反轻量架构边界。\n' >&2
   exit 1
 fi
+
+upgrade_test_dir=$(mktemp -d)
+upgrade_config_dir="$upgrade_test_dir/config"
+upgrade_service_file="$upgrade_test_dir/gost-socks.service"
+mkdir -p "$upgrade_config_dir"
+
+write_upgrade_fixture() {
+  local fixture_version=$1
+  cat >"$upgrade_config_dir/node.env" <<EOF
+NODE_NAME=fixture-node
+PUBLIC_IP=192.0.2.10
+SOCKS_PORT=31080
+SOCKS_USERNAME=fixture_user
+SOCKS_PASSWORD=fixture_password_123456
+TOOL_VERSION=$fixture_version
+EOF
+  cat >"$upgrade_service_file" <<'EOF'
+[Service]
+ExecStart=/usr/local/lib/gost-socks/gost -C /etc/gost-socks/gost.yaml
+EOF
+}
+
+upgrade_env=(
+  "SOCKS_CONFIG_DIR=$upgrade_config_dir"
+  "SOCKS_SERVICE_FILE=$upgrade_service_file"
+  "SOCKS_REPOSITORY_URL=$project_dir"
+  "SOCKS_LOCK_FILE=$upgrade_test_dir/upgrade.lock"
+)
+
+expect_upgrade_failure() {
+  local expected_text=$1
+  shift
+  local failure_output
+  if failure_output=$(env "${upgrade_env[@]}" "$project_dir/scripts/socks-upgrade" "$@" 2>&1); then
+    printf '升级器本应拒绝该测试场景：%s\n' "$*" >&2
+    exit 1
+  fi
+  grep -Fq "$expected_text" <<<"$failure_output" || {
+    printf '升级器拒绝原因不符合预期：%s\n%s\n' "$expected_text" "$failure_output" >&2
+    exit 1
+  }
+}
+
+write_upgrade_fixture 1.8.0
+current_output=$(env "${upgrade_env[@]}" "$project_dir/scripts/socks-upgrade" --current)
+grep -Fq '当前工具版本：1.8.0' <<<"$current_output"
+before_check=$(cksum "$upgrade_config_dir/node.env" "$upgrade_service_file")
+check_output=$(env "${upgrade_env[@]}" "$project_dir/scripts/socks-upgrade" --check v1.8.1)
+after_check=$(cksum "$upgrade_config_dir/node.env" "$upgrade_service_file")
+[[ $before_check == "$after_check" ]]
+grep -Fq '只读检查结束，没有修改服务器' <<<"$check_output"
+if grep -Fq 'fixture_password_123456' <<<"$check_output"; then
+  printf '升级只读检查泄露了代理密码。\n' >&2
+  exit 1
+fi
+
+write_upgrade_fixture 1.8.1
+expect_upgrade_failure '无需重复升级' --check v1.8.1
+expect_upgrade_failure '升级命令禁止降级' --check v1.8.0
+expect_upgrade_failure '目标必须是完整稳定标签' --check latest
+
+write_upgrade_fixture 1.8.0
+expect_upgrade_failure 'GitHub 上没有找到稳定标签' --check v9.9.9
+printf '%s\n' '[Service]' 'ExecStart=/usr/bin/unknown-proxy' >"$upgrade_service_file"
+expect_upgrade_failure '服务文件不属于当前项目' --check v1.8.1
+mkdir -p "$upgrade_test_dir/empty-config"
+missing_env=(
+  "SOCKS_CONFIG_DIR=$upgrade_test_dir/empty-config"
+  "SOCKS_SERVICE_FILE=$upgrade_service_file"
+  "SOCKS_REPOSITORY_URL=$project_dir"
+)
+if missing_output=$(env "${missing_env[@]}" "$project_dir/scripts/socks-upgrade" --current 2>&1); then
+  printf '升级器不应把空目录识别为本项目节点。\n' >&2
+  exit 1
+fi
+grep -Fq '没有发现本项目节点' <<<"$missing_output"
+rm -rf -- "$upgrade_test_dir"
 
 incident_test_dir=$(mktemp -d)
 first_incident=$(SOCKS_SAFETY_ROOT="$incident_test_dir" "$project_dir/scripts/socks-safety" \
@@ -259,9 +351,16 @@ export_output=$(SOCKSCTL_CONFIG_DIR="$test_config_dir" "$project_dir/scripts/soc
 grep -Fq 'socks://bm9kZV9leGFtcGxlOjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm@203.0.113.10:31080#203.0.113.10' <<<"$export_output"
 grep -Fq 'socks5://node_example:0123456789abcdef0123456789abcdef@203.0.113.10:31080#203.0.113.10' <<<"$export_output"
 grep -Fq '203.0.113.10=socks5,203.0.113.10,31080,node_example,0123456789abcdef0123456789abcdef' <<<"$export_output"
-if grep -R -nE '130\.94\.102\.34|38\.92\.14\.4|SOCKS_PASSWORD=[^$]' \
-  "$project_dir" --exclude-dir=.git --exclude='syntax.sh'; then
-  printf '检测到疑似真实节点 IP 或明文密码。\n' >&2
+unexpected_ips=$(rg -o --no-filename '([0-9]{1,3}\.){3}[0-9]{1,3}' "$project_dir" \
+  -g '!.git/**' | sort -u \
+  | grep -Ev '^(0\.0\.0\.0|127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|192\.0\.2\.[0-9]{1,3}|198\.51\.100\.[0-9]{1,3}|203\.0\.113\.[0-9]{1,3})$' \
+  || true)
+if [[ -n $unexpected_ips ]]; then
+  printf '检测到不属于文档示例网段的 IPv4：\n%s\n' "$unexpected_ips" >&2
+  exit 1
+fi
+if grep -R -nE 'SOCKS_PASSWORD=[^$]' "$project_dir" --exclude-dir=.git --exclude='syntax.sh'; then
+  printf '检测到仓库文件写入明文节点密码。\n' >&2
   exit 1
 fi
 

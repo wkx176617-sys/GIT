@@ -35,6 +35,7 @@ rm -rf -- /etc/gost-socks /usr/local/lib/gost-socks
 rm -rf -- /var/lib/gost-socks-safety
 rm -f -- /usr/local/sbin/socksctl /usr/local/sbin/socks-uninstall \
   /usr/local/sbin/socks-doctor /usr/local/sbin/socks-safety /usr/local/sbin/socks-refresh-ip
+rm -f -- /usr/local/sbin/socks-upgrade
 
 if id gost-socks >/dev/null 2>&1; then
   userdel gost-socks >/dev/null 2>&1 || true

@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
-readonly TOOL_VERSION_CURRENT="1.8.1"
+readonly TOOL_VERSION_CURRENT="1.9.0"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -14,6 +14,7 @@ readonly UNINSTALL_PATH="/usr/local/sbin/socks-uninstall"
 readonly DOCTOR_PATH="/usr/local/sbin/socks-doctor"
 readonly SAFETY_PATH="/usr/local/sbin/socks-safety"
 readonly REFRESH_IP_PATH="/usr/local/sbin/socks-refresh-ip"
+readonly UPGRADE_PATH="/usr/local/sbin/socks-upgrade"
 readonly LOCK_FILE="/run/lock/gost-socks-main.lock"
 
 usage() {
@@ -55,12 +56,14 @@ existing_username=""
 existing_password=""
 existing_public_ip=""
 allow_downgrade=false
+preserve_node=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --name) [[ $# -ge 2 ]] || die "--name 缺少值"; node_name=$2; shift 2 ;;
     --port) [[ $# -ge 2 ]] || die "--port 缺少值"; port=$2; shift 2 ;;
     --allow-downgrade) allow_downgrade=true; shift ;;
+    --preserve-node) preserve_node=true; shift ;;
     --help|-h) usage; exit 0 ;;
     *) die "未知参数：$1" ;;
   esac
@@ -69,7 +72,7 @@ done
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.8.1 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.9.0 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
@@ -112,6 +115,22 @@ if [[ -f $ENV_FILE ]]; then
 fi
 existing_tool_version=${existing_tool_version:-none}
 
+if [[ $preserve_node == true ]]; then
+  [[ -f $ENV_FILE ]] || die "--preserve-node 只允许用于已有本项目节点"
+  [[ -z $node_name || $node_name == "$existing_node_name" ]] \
+    || die "保留模式不允许改变节点名称"
+  [[ -z $port || $port == "$existing_port" ]] \
+    || die "保留模式不允许改变代理端口"
+  [[ -z $username || $username == "$existing_username" ]] \
+    || die "保留模式不允许改变代理用户名"
+  [[ -z $password || $password == "$existing_password" ]] \
+    || die "保留模式不允许改变代理密码"
+  node_name=$existing_node_name
+  port=$existing_port
+  username=$existing_username
+  password=$existing_password
+fi
+
 version_is_newer() {
   local left=$1 right=$2 left_major left_minor left_patch right_major right_minor right_patch
   [[ $left =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && $right =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
@@ -124,7 +143,7 @@ version_is_newer() {
 
 if version_is_newer "$existing_tool_version" "$TOOL_VERSION_CURRENT"; then
   [[ $allow_downgrade == true ]] \
-    || die "检测到已安装 v$existing_tool_version，高于当前 v$TOOL_VERSION_CURRENT。为防止误降级已停止；确认需要时添加 --allow-downgrade"
+    || die "检测到已安装 v${existing_tool_version}，高于当前 v${TOOL_VERSION_CURRENT}。为防止误降级已停止；确认需要时添加 --allow-downgrade"
   [[ -t 0 ]] || die "降级必须在交互式 SSH/Xshell 窗口中确认"
   printf '降级可能恢复旧行为。输入 DOWNGRADE 确认：'
   read -r downgrade_answer
@@ -169,8 +188,12 @@ for required_command in curl find install sha256sum ss systemctl tar useradd; do
   command -v "$required_command" >/dev/null 2>&1 || die "缺少系统命令：$required_command"
 done
 
-public_ip=$(curl -4 --fail --silent --show-error --max-time 10 https://api.ipify.org 2>/dev/null || true)
-public_ip=${public_ip:-$existing_public_ip}
+if [[ $preserve_node == true ]]; then
+  public_ip=$existing_public_ip
+else
+  public_ip=$(curl -4 --fail --silent --show-error --max-time 10 https://api.ipify.org 2>/dev/null || true)
+  public_ip=${public_ip:-$existing_public_ip}
+fi
 if [[ -z $node_name ]]; then
   [[ $public_ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] \
     || die "无法自动获取 VPS 公网 IPv4，请检查网络后重试，或使用 --name 手动指定"
@@ -188,7 +211,7 @@ version_file="$script_dir/VERSION"
 [[ -f $version_file ]] || die "安装包缺少 VERSION；请重新下载完整稳定版，不要使用散落的旧脚本"
 package_version=$(tr -d '[:space:]' <"$version_file")
 [[ $package_version == "$TOOL_VERSION_CURRENT" ]] \
-  || die "安装包发生混版：VERSION=v$package_version，install.sh=v$TOOL_VERSION_CURRENT。请重新下载完整稳定版"
+  || die "安装包发生混版：VERSION=v${package_version}，install.sh=v${TOOL_VERSION_CURRENT}。请重新下载完整稳定版"
 control_source="$script_dir/scripts/socksctl"
 [[ -f $control_source ]] || die "安装包缺少 scripts/socksctl；请重新下载完整稳定版"
 doctor_source="$script_dir/scripts/socks-doctor"
@@ -197,6 +220,8 @@ safety_source="$script_dir/scripts/socks-safety"
 [[ -f $safety_source ]] || die "安装包缺少 scripts/socks-safety；请重新下载完整稳定版"
 refresh_ip_source="$script_dir/scripts/socks-refresh-ip"
 [[ -f $refresh_ip_source ]] || die "安装包缺少 scripts/socks-refresh-ip；请重新下载完整稳定版"
+upgrade_source="$script_dir/scripts/socks-upgrade"
+[[ -f $upgrade_source ]] || die "安装包缺少 scripts/socks-upgrade；请重新下载完整稳定版"
 uninstall_source="$script_dir/uninstall.sh"
 [[ -f $uninstall_source ]] || die "安装包缺少 uninstall.sh"
 
@@ -212,6 +237,7 @@ if [[ $existing_tool_version == "$TOOL_VERSION_CURRENT" \
    && $password == "$existing_password" \
    && -x $DOCTOR_PATH \
    && -x $REFRESH_IP_PATH \
+   && -x $UPGRADE_PATH \
    && -d /var/lib/gost-socks-safety/snapshots/last-good \
    && $(systemctl is-active gost-socks.service 2>/dev/null || true) == active ]]; then
   if "$DOCTOR_PATH" --local >/dev/null 2>&1; then
@@ -240,6 +266,9 @@ downloaded_binary=$(find "$tmp_dir/extracted" -type f -name gost -print -quit)
 [[ -n $downloaded_binary ]] || die "归档内未找到 gost 可执行文件"
 
 transaction_snapshot=$(bash "$safety_source" snapshot 2>/dev/null || true)
+if [[ $preserve_node == true && -z $transaction_snapshot ]]; then
+  die "无法创建升级前事务快照；没有修改节点，请运行 socksctl report"
+fi
 install_rollback() {
   local line=$1 status=$2 code=${3:-INSTALL_UNKNOWN}
   local detail=${4:-unexpected-install-failure-line-$line-status-$status}
@@ -308,6 +337,7 @@ install -m 0755 "$uninstall_source" "$UNINSTALL_PATH"
 install -m 0755 "$doctor_source" "$DOCTOR_PATH"
 install -m 0755 "$safety_source" "$SAFETY_PATH"
 install -m 0755 "$refresh_ip_source" "$REFRESH_IP_PATH"
+install -m 0755 "$upgrade_source" "$UPGRADE_PATH"
 
 service_temp=$(mktemp /etc/systemd/system/.gost-socks.service.XXXXXX)
 cat >"$service_temp" <<EOF
@@ -359,6 +389,20 @@ doctor_status=0
 "$DOCTOR_PATH" || doctor_status=$?
 if [[ $doctor_status -ne 0 ]]; then
   install_rollback "$LINENO" "$doctor_status" INSTALL_VERIFICATION_FAILED "doctor-exit-$doctor_status"
+fi
+if [[ $preserve_node == true ]]; then
+  installed_node_name=$(read_env_value NODE_NAME)
+  installed_public_ip=$(read_env_value PUBLIC_IP)
+  installed_port=$(read_env_value SOCKS_PORT)
+  installed_username=$(read_env_value SOCKS_USERNAME)
+  installed_password=$(read_env_value SOCKS_PASSWORD)
+  if [[ $installed_node_name != "$existing_node_name" \
+     || $installed_public_ip != "$existing_public_ip" \
+     || $installed_port != "$existing_port" \
+     || $installed_username != "$existing_username" \
+     || $installed_password != "$existing_password" ]]; then
+    install_rollback "$LINENO" 1 INSTALL_PRESERVATION_FAILED node-identity-changed
+  fi
 fi
 "$SAFETY_PATH" promote "$transaction_snapshot" >/dev/null
 trap - ERR

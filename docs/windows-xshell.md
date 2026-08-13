@@ -46,8 +46,8 @@ root@server:~#
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.8.1 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.8.1
-bash /root/socks5-toolkit-v1.8.1/xshell-install.sh --port 31080
+git clone --branch v1.9.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.9.0
+bash /root/socks5-toolkit-v1.9.0/xshell-install.sh --port 31080
 ```
 
 程序会先做只读质检，再安装固定版本 GOST。节点名称自动使用 VPS 公网 IP。安装成功后立即
@@ -68,12 +68,12 @@ socksctl guide
 
 只有第三步的 `git clone` 明确失败时才使用：
 
-1. 在 Windows 下载本项目 `v1.8.1` 源码压缩包并解压。
-2. 使用 Xshell 远程文件管理器或 Xftp，把整个目录上传到 `/root/socks5-toolkit-v1.8.1`。
+1. 在 Windows 下载本项目 `v1.9.0` 源码压缩包并解压。
+2. 使用 Xshell 远程文件管理器或 Xftp，把整个目录上传到 `/root/socks5-toolkit-v1.9.0`。
 3. 回到 `root@...#` 运行：
 
 ```bash
-bash /root/socks5-toolkit-v1.8.1/xshell-install.sh --port 31080
+bash /root/socks5-toolkit-v1.9.0/xshell-install.sh --port 31080
 ```
 
 ## 可选情况：旧节点已经占用端口
@@ -81,7 +81,7 @@ bash /root/socks5-toolkit-v1.8.1/xshell-install.sh --port 31080
 标准安装会先质检。只有报告明确显示“可迁移：旧 sing-box SOCKS5”时才运行：
 
 ```bash
-bash /root/socks5-toolkit-v1.8.1/xshell-install.sh --port 31080 --overwrite
+bash /root/socks5-toolkit-v1.9.0/xshell-install.sh --port 31080 --overwrite
 ```
 
 它会备份并保留可识别的旧凭据。检测到 x-ui、Xray、v2ray 或未知程序时会停止；不要强行
@@ -89,15 +89,8 @@ bash /root/socks5-toolkit-v1.8.1/xshell-install.sh --port 31080 --overwrite
 
 ## 可选情况：升级稳定版本
 
-阅读对应版本说明后，在服务器逐行运行：
-
-```bash
-git clone --branch 新版本标签 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-新版本标签
-bash /root/socks5-toolkit-新版本标签/xshell-install.sh --port 31080
-```
-
-不要部署 `main`，不要使用 `git reset --hard`。重复安装会保留现有节点参数，健康且参数相同
-时会安全跳过不必要的覆写。
+不要重复这里的安装步骤。统一按照[安全升级到指定版本](upgrade.md)操作；升级器只接受已有
+本项目节点，不会执行首次安装、降级或其他代理迁移。
 
 ## 连接问题
 
