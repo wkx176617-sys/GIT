@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
-readonly TOOL_VERSION_CURRENT="1.8.0"
+readonly TOOL_VERSION_CURRENT="1.8.1"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -32,6 +32,7 @@ die() {
 }
 
 [[ ${1:-} != "--help" && ${1:-} != "-h" ]] || { usage; exit 0; }
+[[ ${1:-} != "--version" ]] || { printf '%s\n' "$TOOL_VERSION_CURRENT"; exit 0; }
 [[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"
 [[ -d /run/systemd/system ]] || die "此系统未使用 systemd"
 if ! command -v flock >/dev/null 2>&1; then
@@ -68,7 +69,7 @@ done
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.8.0 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.8.1 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
@@ -183,18 +184,19 @@ if [[ -n $port_listener && $port_listener != *'"gost"'* ]]; then
 fi
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-control_source="$script_dir/socksctl"
-[[ -f $control_source ]] || control_source="$script_dir/scripts/socksctl"
-[[ -f $control_source ]] || die "安装包缺少 socksctl"
-doctor_source="$script_dir/socks-doctor"
-[[ -f $doctor_source ]] || doctor_source="$script_dir/scripts/socks-doctor"
-[[ -f $doctor_source ]] || die "安装包缺少 socks-doctor"
-safety_source="$script_dir/socks-safety"
-[[ -f $safety_source ]] || safety_source="$script_dir/scripts/socks-safety"
-[[ -f $safety_source ]] || die "安装包缺少 socks-safety"
-refresh_ip_source="$script_dir/socks-refresh-ip"
-[[ -f $refresh_ip_source ]] || refresh_ip_source="$script_dir/scripts/socks-refresh-ip"
-[[ -f $refresh_ip_source ]] || die "安装包缺少 socks-refresh-ip"
+version_file="$script_dir/VERSION"
+[[ -f $version_file ]] || die "安装包缺少 VERSION；请重新下载完整稳定版，不要使用散落的旧脚本"
+package_version=$(tr -d '[:space:]' <"$version_file")
+[[ $package_version == "$TOOL_VERSION_CURRENT" ]] \
+  || die "安装包发生混版：VERSION=v$package_version，install.sh=v$TOOL_VERSION_CURRENT。请重新下载完整稳定版"
+control_source="$script_dir/scripts/socksctl"
+[[ -f $control_source ]] || die "安装包缺少 scripts/socksctl；请重新下载完整稳定版"
+doctor_source="$script_dir/scripts/socks-doctor"
+[[ -f $doctor_source ]] || die "安装包缺少 scripts/socks-doctor；请重新下载完整稳定版"
+safety_source="$script_dir/scripts/socks-safety"
+[[ -f $safety_source ]] || die "安装包缺少 scripts/socks-safety；请重新下载完整稳定版"
+refresh_ip_source="$script_dir/scripts/socks-refresh-ip"
+[[ -f $refresh_ip_source ]] || die "安装包缺少 scripts/socks-refresh-ip；请重新下载完整稳定版"
 uninstall_source="$script_dir/uninstall.sh"
 [[ -f $uninstall_source ]] || die "安装包缺少 uninstall.sh"
 
@@ -368,6 +370,7 @@ cat <<EOF
 ============================================================
 GOST SOCKS5 节点安装成功
 ============================================================
+工具版本：v$TOOL_VERSION_CURRENT
 节点名称：$node_name
 服务器：  $public_ip
 端口：    $port

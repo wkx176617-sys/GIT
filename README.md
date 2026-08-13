@@ -6,7 +6,7 @@
 
 **给第一次接触服务器的你，一条轻盈、清楚、可以回头的搭建路线。**
 
-[![stable v1.8.0](https://img.shields.io/badge/stable-v1.8.0-E5B8BE?style=flat-square)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.8.0)
+[![stable v1.8.1](https://img.shields.io/badge/stable-v1.8.1-E5B8BE?style=flat-square)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.8.1)
 [![checks](https://img.shields.io/github/actions/workflow/status/wkx176617-sys/GIT/validate.yml?label=checks&style=flat-square&labelColor=F3E8E4&color=A9B8A1)](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04_·_22.04_·_24.04-C98F96?style=flat-square)](docs/tutorial.md)
 [![GOST](https://img.shields.io/badge/GOST-3.2.6-A9B8A1?style=flat-square)](https://github.com/go-gost/gost/releases/tag/v3.2.6)
@@ -15,7 +15,7 @@
 
 </div>
 
-> 当前推荐稳定版本：`v1.8.0`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
+> 当前推荐稳定版本：`v1.8.1`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
 
 每台 Ubuntu VPS 运行一个轻量 GOST SOCKS5 节点，默认使用 `31080/TCP`。Mac 或 Windows
 只负责连接服务器和使用浏览器，不需要运行本项目后台服务。
@@ -44,8 +44,8 @@ SSH 登录 Ubuntu VPS，看到 `root@...#` 后，每次只复制一行：
 
 ```bash
 apt-get update && apt-get install -y git ca-certificates
-git clone --branch v1.8.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit
-bash /root/socks5-toolkit/xshell-install.sh --port 31080
+git clone --branch v1.8.1 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.8.1
+bash /root/socks5-toolkit-v1.8.1/xshell-install.sh --port 31080
 ```
 
 </details>

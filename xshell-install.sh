@@ -20,11 +20,17 @@ die() {
 [[ $(id -u) -eq 0 ]] || die "请使用 root 登录，或在命令前添加 sudo"
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+[[ -f $script_dir/VERSION ]] || die "当前是散落的旧安装脚本。请按教程重新下载完整稳定版"
 [[ -f $script_dir/install.sh ]] || die "同目录中缺少 install.sh，请完整下载或上传本项目"
 [[ -f $script_dir/preflight.sh ]] || die "同目录中缺少 preflight.sh，请完整下载或上传本项目"
 [[ -f $script_dir/overwrite.sh ]] || die "同目录中缺少 overwrite.sh，请完整下载或上传本项目"
-[[ -f $script_dir/scripts/socks-refresh-ip || -f $script_dir/socks-refresh-ip ]] \
-  || die "项目缺少 socks-refresh-ip，请完整下载或上传本项目"
+[[ -f $script_dir/scripts/socks-refresh-ip ]] \
+  || die "项目缺少 scripts/socks-refresh-ip，请完整下载或上传本项目"
+package_version=$(tr -d '[:space:]' <"$script_dir/VERSION")
+installer_version=$(bash "$script_dir/install.sh" --version)
+[[ $package_version == "$installer_version" ]] \
+  || die "安装包发生混版：VERSION=v$package_version，install.sh=v$installer_version。请重新下载完整稳定版"
+printf '已验明完整安装包：v%s（目录：%s）\n' "$package_version" "$script_dir"
 
 overwrite=false
 install_args=()

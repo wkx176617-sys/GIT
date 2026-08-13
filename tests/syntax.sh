@@ -39,10 +39,19 @@ done
 "$project_dir/addons/bbr/uninstall.sh" --help >/dev/null
 
 grep -q 'port=31080' "$project_dir/deploy.sh"
+grep -q 'VERSION install.sh' "$project_dir/deploy.sh"
+grep -q "remote_dir/scripts" "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.8.0"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.8.1"' "$project_dir/install.sh"
+grep -q 'control_source="$script_dir/scripts/socksctl"' "$project_dir/install.sh"
+if grep -q 'control_source="$script_dir/socksctl"' "$project_dir/install.sh"; then
+  printf '安装器仍可能优先使用根目录遗留的旧 socksctl。\n' >&2
+  exit 1
+fi
+grep -q '工具版本：v$TOOL_VERSION_CURRENT' "$project_dir/install.sh"
+grep -q '安装包发生混版' "$project_dir/xshell-install.sh"
 grep -q 'refresh-ip' "$project_dir/scripts/socksctl"
 grep -q 'detect_public_ip_consensus' "$project_dir/scripts/socks-refresh-ip"
 grep -q 'winner_count >= 2' "$project_dir/scripts/socks-refresh-ip"

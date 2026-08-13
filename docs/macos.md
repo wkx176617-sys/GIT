@@ -39,8 +39,8 @@ ssh root@你的VPS公网IP
 
 ```bash
 cd "$HOME/Desktop"
-git clone --branch v1.8.0 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit
-cd "$HOME/Desktop/socks5-toolkit"
+git clone --branch v1.8.1 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.8.1
+cd "$HOME/Desktop/socks5-toolkit-v1.8.1"
 ./deploy.sh root@你的VPS公网IP --port 31080
 ```
 
@@ -80,9 +80,9 @@ Mac 不需要长期保留本项目文件夹，也不需要保存本地节点清�
 阅读对应版本说明后，在 Mac 项目目录逐行运行：
 
 ```bash
-cd "$HOME/Desktop/socks5-toolkit"
-git fetch --tags
-git switch --detach 新版本标签
+cd "$HOME/Desktop"
+git clone --branch 新版本标签 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-新版本标签
+cd "$HOME/Desktop/socks5-toolkit-新版本标签"
 ./deploy.sh root@你的VPS公网IP --port 31080
 ```
 
