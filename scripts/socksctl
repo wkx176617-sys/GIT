@@ -10,6 +10,7 @@ readonly SAFETY="${SOCKS_SAFETY_BIN:-/usr/local/sbin/socks-safety}"
 readonly DOCTOR="${SOCKS_DOCTOR_BIN:-/usr/local/sbin/socks-doctor}"
 readonly REFRESH_IP="${SOCKS_REFRESH_IP_BIN:-/usr/local/sbin/socks-refresh-ip}"
 readonly UPGRADE="${SOCKS_UPGRADE_BIN:-/usr/local/sbin/socks-upgrade}"
+readonly BBR="${SOCKS_BBR_BIN:-/usr/local/sbin/bbrctl}"
 readonly LOCK_FILE="${SOCKS_LOCK_FILE:-/run/lock/gost-socks-main.lock}"
 
 usage() {
@@ -25,6 +26,7 @@ usage() {
   qr [类型]         在终端生成二维码：v2rayn、shadowrocket
   refresh-ip        VPS更换公网IP后安全更新节点记录和导入信息
   upgrade latest|vX.Y.Z  一条命令切换稳定版本；旧版需健康快照
+  bbr <命令>       管理核心加速：status、health、enable、disable
   logs [行数]       查看日志，默认 100 行
   restart           重启服务
   rotate            自动生成新密码并重启
@@ -68,8 +70,10 @@ load_env() {
   SOCKS_USERNAME=$(awk -F= '$1 == "SOCKS_USERNAME" {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE")
   SOCKS_PASSWORD=$(awk -F= '$1 == "SOCKS_PASSWORD" {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE")
   TOOL_VERSION=$(awk -F= '$1 == "TOOL_VERSION" {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE")
+  BBR_POLICY=$(awk -F= '$1 == "BBR_POLICY" {sub(/^[^=]*=/, ""); print; exit}' "$ENV_FILE")
   PUBLIC_IP=${PUBLIC_IP:-}
   TOOL_VERSION=${TOOL_VERSION:-legacy}
+  [[ $BBR_POLICY == enabled || $BBR_POLICY == disabled ]] || BBR_POLICY=enabled
   [[ $NODE_NAME =~ ^[A-Za-z0-9._-]{2,32}$ \
      && $SOCKS_PORT =~ ^[0-9]+$ && $SOCKS_PORT -ge 1024 && $SOCKS_PORT -le 65535 \
      && $SOCKS_USERNAME =~ ^[A-Za-z0-9._-]{4,32}$ \
@@ -87,6 +91,7 @@ SOCKS_PORT=$SOCKS_PORT
 SOCKS_USERNAME=$SOCKS_USERNAME
 SOCKS_PASSWORD=$SOCKS_PASSWORD
 TOOL_VERSION=$TOOL_VERSION
+BBR_POLICY=$BBR_POLICY
 EOF
   chmod 0600 "$temp_file"
   mv -f "$temp_file" "$ENV_FILE"
@@ -174,8 +179,8 @@ case "$command_name" in
     load_env
     resolve_public_ip
     service_state=$(systemctl is-active "$SERVICE" 2>/dev/null || true)
-    printf '节点名称：%s\n服务器：%s\n端口：%s\n用户名：%s\n密码：********\n服务状态：%s\n' \
-      "$NODE_NAME" "$PUBLIC_IP" "$SOCKS_PORT" "$SOCKS_USERNAME" "$service_state"
+    printf '节点名称：%s\n服务器：%s\n端口：%s\n用户名：%s\n密码：********\n服务状态：%s\nBBR策略：%s\n' \
+      "$NODE_NAME" "$PUBLIC_IP" "$SOCKS_PORT" "$SOCKS_USERNAME" "$service_state" "$BBR_POLICY"
     ;;
   credentials)
     load_env
@@ -223,6 +228,36 @@ case "$command_name" in
     require_root
     [[ -x $UPGRADE ]] || die "尚未安装安全版本切换模块，请按版本切换教程先引入一次"
     exec "$UPGRADE" "$@"
+    ;;
+  bbr)
+    load_env
+    [[ -x $BBR ]] || die "未安装核心 BBR 控制器，请先升级主程序"
+    bbr_command=${1:-status}
+    [[ $# -le 1 ]] || die "bbr 只接受一个命令：status、health、enable 或 disable"
+    case "$bbr_command" in
+      status|health) exec "$BBR" "$bbr_command" ;;
+      enable)
+        acquire_lock
+        "$BBR" enable
+        BBR_POLICY=enabled
+        save_env
+        printf '核心 BBR 开关已保存为开启；后续升级会保留此选择。\n'
+        ;;
+      disable)
+        acquire_lock
+        if [[ -f /var/lib/gost-socks-bbr/original.conf ]]; then
+          "$BBR" restore --yes
+        elif [[ -f /etc/sysctl.d/99-gost-socks-bbr.conf ]]; then
+          die "发现核心 BBR 配置但缺少原始状态记录；为避免错误恢复，已停止，请运行 socksctl report"
+        else
+          printf '本项目没有接管 BBR 设置，不修改其他来源的网络配置。\n'
+        fi
+        BBR_POLICY=disabled
+        save_env
+        printf '核心 BBR 开关已关闭；后续升级会保留此选择。\n'
+        ;;
+      *) die "bbr 命令只能是 status、health、enable 或 disable" ;;
+    esac
     ;;
   logs)
     require_root
@@ -275,6 +310,7 @@ case "$command_name" in
   version)
     load_env
     printf '项目工具版本：%s\n' "${TOOL_VERSION/#legacy/早期版本（未记录版本号）}"
+    printf '核心 BBR 策略：%s\n' "$BBR_POLICY"
     printf 'GOST 核心版本：\n'
     "$BINARY" -V
     ;;
@@ -505,7 +541,8 @@ SOCKS5 中文新手菜单
   7. 手工恢复最后可用状态（有二次确认）
   8. 查看节点信息（密码打码）
   9. VPS更换公网IP后更新节点记录
-  10. 查询本项目工具版本（切换版本请看安全版本切换专题）
+  10. 查看核心 BBR 加速状态
+  11. 查询本项目工具版本（切换版本请看安全版本切换专题）
   0. 退出，不做任何操作
 EOF
     printf '请输入一个数字后按回车：'
@@ -520,7 +557,8 @@ EOF
       7) exec "$0" recover ;;
       8) exec "$0" info ;;
       9) exec "$0" refresh-ip ;;
-      10)
+      10) exec "$0" bbr status ;;
+      11)
         [[ -x $UPGRADE ]] || die "尚未安装安全版本切换模块，请按版本切换教程先引入一次"
         exec "$UPGRADE" --current
         ;;

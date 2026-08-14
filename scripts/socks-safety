@@ -16,6 +16,7 @@ readonly -a TOOL_NAMES=(
   socks-safety
   socks-refresh-ip
   socks-upgrade
+  bbrctl
 )
 
 usage() {
@@ -215,7 +216,7 @@ restore_snapshot() {
   init_state
   validate_snapshot "$source" >/dev/null
   local restore_id stage_config stage_binary stage_tools old_config old_binary old_service old_tools
-  local config_parent binary_parent tool_name restore_tools=false
+  local config_parent binary_parent tool_name restore_tools=false preserve_legacy_bbrctl=false
   restore_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
   config_parent=$(dirname "$CONFIG_DIR")
   binary_parent=$(dirname "$BINARY_DIR")
@@ -238,6 +239,9 @@ restore_snapshot() {
   [[ -f $SERVICE_FILE ]] && cp -a "$SERVICE_FILE" "$old_service"
   if [[ -f $source/tools-present ]]; then
     restore_tools=true
+    if ! grep -Fxq bbrctl "$source/tools-present"; then
+      preserve_legacy_bbrctl=true
+    fi
     stage_tools=$(mktemp -d "$STATE_ROOT/.restore-tools.XXXXXX")
     install -d -m 0700 "$old_tools/tools"
     : >"$old_tools/tools-present"
@@ -263,6 +267,7 @@ restore_snapshot() {
     [[ -f $old_service ]] && install -m 0644 "$old_service" "$SERVICE_FILE"
     if [[ $restore_tools == true ]]; then
       for tool_name in "${TOOL_NAMES[@]}"; do
+        [[ $preserve_legacy_bbrctl == true && $tool_name == bbrctl ]] && continue
         rm -f -- "$TOOLS_DIR/$tool_name"
         if grep -Fxq "$tool_name" "$old_tools/tools-present" 2>/dev/null; then
           install -m 0755 "$old_tools/tools/$tool_name" "$TOOLS_DIR/$tool_name"
@@ -285,6 +290,7 @@ restore_snapshot() {
   if [[ $restore_tools == true ]]; then
     install -d -m 0755 "$TOOLS_DIR"
     for tool_name in "${TOOL_NAMES[@]}"; do
+      [[ $preserve_legacy_bbrctl == true && $tool_name == bbrctl ]] && continue
       if grep -Fxq "$tool_name" "$source/tools-present"; then
         install -m 0755 "$stage_tools/$tool_name" "$TOOLS_DIR/$tool_name"
       else

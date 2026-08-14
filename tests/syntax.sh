@@ -15,10 +15,9 @@ files=(
   "$project_dir/scripts/socks-safety"
   "$project_dir/scripts/socks-refresh-ip"
   "$project_dir/scripts/socks-upgrade"
+  "$project_dir/scripts/bbrctl"
   "$project_dir/scripts/release-check.sh"
-  "$project_dir/addons/bbr/bbrctl"
-  "$project_dir/addons/bbr/install.sh"
-  "$project_dir/addons/bbr/uninstall.sh"
+  "$project_dir/tests/bbr-flow.sh"
   "$project_dir/tests/upgrade-flow.sh"
 )
 
@@ -40,9 +39,7 @@ command -v python3 >/dev/null 2>&1 || { printf '缺少文档导航检查所需�
 "$project_dir/scripts/socks-safety" --help >/dev/null
 "$project_dir/scripts/socks-refresh-ip" --help >/dev/null
 "$project_dir/scripts/socks-upgrade" --help >/dev/null
-"$project_dir/addons/bbr/bbrctl" --help >/dev/null
-"$project_dir/addons/bbr/install.sh" --help >/dev/null
-"$project_dir/addons/bbr/uninstall.sh" --help >/dev/null
+"$project_dir/scripts/bbrctl" --help >/dev/null
 if "$project_dir/install.sh" --help | grep -Fq -- '--preserve-node'; then
   printf '安装器帮助不应暴露升级器内部的保留模式，避免形成第二条升级路径。\n' >&2
   exit 1
@@ -57,7 +54,7 @@ grep -q -- '-O exit' "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.11.0"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.12.0"' "$project_dir/install.sh"
 grep -q 'for dependency_command in base64 .*qrencode' "$project_dir/install.sh"
 grep -q 'apt-get install -y .*qrencode' "$project_dir/install.sh"
 grep -q 'for required_command in base64 .*qrencode' "$project_dir/install.sh"
@@ -155,20 +152,22 @@ grep -q '20.04|22.04|24.04' "$project_dir/preflight.sh"
 grep -q '/root/gost-socks-backups' "$project_dir/overwrite.sh"
 grep -q 'systemctl disable --now sing-box' "$project_dir/overwrite.sh"
 grep -q 'trap rollback ERR' "$project_dir/overwrite.sh"
-grep -q '^PLUGIN_VERSION=1.1.1$' "$project_dir/addons/bbr/plugin.conf"
-grep -q '^MAIN_MIN_VERSION=1.4.0$' "$project_dir/addons/bbr/plugin.conf"
-grep -q '^MAIN_MAX_MAJOR=1$' "$project_dir/addons/bbr/plugin.conf"
-grep -q 'net.ipv4.tcp_congestion_control = bbr' "$project_dir/addons/bbr/bbrctl"
-grep -q 'net.core.default_qdisc = fq' "$project_dir/addons/bbr/bbrctl"
-grep -q 'trap rollback_enable ERR' "$project_dir/addons/bbr/bbrctl"
-grep -q '重复 enable 已安全跳过' "$project_dir/addons/bbr/bbrctl"
-grep -q 'find_conflicts' "$project_dir/addons/bbr/bbrctl"
-grep -q '输入 RESTORE-BBR 确认' "$project_dir/addons/bbr/bbrctl"
-grep -q '输入 UNINSTALL-BBR 确认' "$project_dir/addons/bbr/uninstall.sh"
-if rg -n 'bbrctl|addons/bbr|tcp_congestion_control' \
-  "$project_dir/deploy.sh" "$project_dir/install.sh" "$project_dir/xshell-install.sh" \
-  "$project_dir/preflight.sh" "$project_dir/overwrite.sh" "$project_dir/scripts/socksctl"; then
-  printf 'BBR 插件被主程序直接调用，不再是独立插件。\n' >&2
+grep -q 'net.ipv4.tcp_congestion_control = bbr' "$project_dir/scripts/bbrctl"
+grep -q 'net.core.default_qdisc = fq' "$project_dir/scripts/bbrctl"
+grep -q 'trap rollback_enable ERR' "$project_dir/scripts/bbrctl"
+grep -q '重复 enable 已安全跳过' "$project_dir/scripts/bbrctl"
+grep -q 'find_conflicts' "$project_dir/scripts/bbrctl"
+grep -q 'preflight)' "$project_dir/scripts/bbrctl"
+grep -q '输入 RESTORE-BBR 确认' "$project_dir/scripts/bbrctl"
+grep -q 'BBR_POLICY=$bbr_policy' "$project_dir/install.sh"
+grep -q 'bbr_policy=enabled' "$project_dir/install.sh"
+grep -q -- '--no-bbr' "$project_dir/install.sh"
+grep -q '"$BBR_PATH" enable' "$project_dir/install.sh"
+grep -q 'bbr <命令>' "$project_dir/scripts/socksctl"
+grep -q 'BBR_INACTIVE' "$project_dir/scripts/socks-doctor"
+grep -q '/usr/local/sbin/bbrctl restore --yes' "$project_dir/uninstall.sh"
+if find "$project_dir/addons" -mindepth 2 -maxdepth 2 -name plugin.conf -type f | grep -q .; then
+  printf '插件中心应暂时为空。\n' >&2
   exit 1
 fi
 if rg -n 'crontab|/etc/cron|systemctl[[:space:]]+(enable|start).*\.timer|docker[[:space:]]+run|podman[[:space:]]+run' \

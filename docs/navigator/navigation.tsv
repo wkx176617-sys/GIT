@@ -11,5 +11,5 @@ troubleshooting	docs/troubleshooting.md	故障处理	故障检查与求助	记�
 mobile	docs/mobile-network-check.md	客户端	手机网络环境检查	检查 Wi-Fi、手机流量、VPN 和小火箭出口。	手机 WiFi 流量 VPN 小火箭 出口 检测	clients	clients
 bitbrowser	docs/bitbrowser-fail-closed.md	客户端	比特浏览器失败关闭	代理失效时阻止窗口继续裸连的人工设置和验收。	比特浏览器 防裸连 失败关闭 白名单 网络错误	clients	clients
 network-checks	docs/announcements/network-check-links.md	客户端	网络检测网站与方法	检查出口 IPv4、IPv6、WebRTC、DNS、地区和网络类型。	检测网站 IPv4 IPv6 WebRTC DNS IP 地区 风险	clients	clients
-addons	addons/README.md	可选插件	可选插件中心	首次搭建完成后按真实需要选择独立插件。	插件 可选 扩展 加速 BBR FQ	navigation	bbr
-bbr	addons/bbr/README.md	可选插件	BBR + FQ 插件	为部分高延迟或丢包 TCP 线路提供可回退的拥塞控制选项。	BBR FQ 加速 延迟 丢包 TCP 卸载 恢复	addons	none
+addons	addons/README.md	可选插件	可选插件中心	保留未来真正独立、非核心扩展的统一入口。	插件 可选 扩展 空 插件中心	navigation	none
+bbr	docs/network-performance.md	网络验收	网络性能与核心 BBR	诊断代理能连接但很慢的问题，并管理默认 BBR + FQ 开关与恢复。	BBR FQ 加速 延迟 丢包 TCP 下载 上传 抖动 VPN 多跳 恢复	navigation	clients

@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly STATE_DIR="/var/lib/gost-socks-bbr"
+readonly STATE_DIR="${BBR_STATE_DIR:-/var/lib/gost-socks-bbr}"
 readonly STATE_FILE="$STATE_DIR/original.conf"
-readonly SYSCTL_FILE="/etc/sysctl.d/99-gost-socks-bbr.conf"
-readonly LOCK_FILE="/run/lock/gost-socks-bbr.lock"
+readonly SYSCTL_ROOT="${BBR_SYSCTL_ROOT:-/etc}"
+readonly SYSCTL_FILE="${BBR_SYSCTL_FILE:-$SYSCTL_ROOT/sysctl.d/99-gost-socks-bbr.conf}"
+readonly LOCK_FILE="${BBR_LOCK_FILE:-/run/lock/gost-socks-bbr.lock}"
+readonly OS_RELEASE_FILE="${BBR_OS_RELEASE_FILE:-/etc/os-release}"
 
 usage() {
   cat <<'EOF'
 用法：sudo bbrctl <命令>
 
 命令：
-  status    查看当前拥塞算法、队列规则和插件状态（只读）
+  status    查看当前拥塞算法、队列规则和核心状态（只读）
   check     检查 Ubuntu、内核与 BBR 支持情况（只读）
+  preflight 安装前检查支持、实际状态和配置冲突（只读）
   health    检查实际设置、持久配置和配置冲突（只读）
   enable    保存当前设置并启用 BBR + FQ
   repair    持久配置存在但失效时重新应用
@@ -21,7 +24,9 @@ EOF
 }
 
 die() { printf '错误：%s\n' "$*" >&2; exit 1; }
-require_root() { [[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"; }
+require_root() {
+  [[ $(id -u) -eq 0 || ${BBR_ALLOW_NON_ROOT_TESTS:-0} == 1 ]] || die "请使用 root 或 sudo 运行"
+}
 
 acquire_lock() {
   command -v flock >/dev/null 2>&1 || die "缺少 flock（util-linux）"
@@ -34,10 +39,10 @@ read_sysctl() {
 }
 
 check_platform() {
-  [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
+  [[ -r $OS_RELEASE_FILE ]] || die "无法读取 $OS_RELEASE_FILE"
   # shellcheck disable=SC1091
-  source /etc/os-release
-  [[ ${ID:-} == ubuntu ]] || die "BBR 插件当前只支持 Ubuntu"
+  source "$OS_RELEASE_FILE"
+  [[ ${ID:-} == ubuntu ]] || die "BBR 核心能力当前只支持 Ubuntu"
   case "${VERSION_ID:-}" in
     20.04|22.04|24.04) ;;
     *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
@@ -59,7 +64,7 @@ verify_bbr_available() {
   local available
   available=$(read_sysctl net.ipv4.tcp_available_congestion_control)
   [[ " $available " == *" bbr "* ]] \
-    || die "当前内核没有提供 BBR；插件不会替换内核，请保持 cubic"
+    || die "当前内核没有提供 BBR；主程序不会替换内核，请保持现状并人工检查"
 }
 
 verify_bbr_supported() {
@@ -69,7 +74,7 @@ verify_bbr_supported() {
     return
   fi
   command -v modinfo >/dev/null 2>&1 && modinfo tcp_bbr >/dev/null 2>&1 \
-    || die "当前内核没有提供 BBR；插件不会替换内核，请保持 cubic"
+    || die "当前内核没有提供 BBR；主程序不会替换内核，请保持现状并人工检查"
 }
 
 save_original_once() {
@@ -100,7 +105,7 @@ effective_enabled() {
 find_conflicts() {
   local source
   CONFLICT_FILES=()
-  for source in /etc/sysctl.conf /etc/sysctl.d/*.conf; do
+  for source in "$SYSCTL_ROOT/sysctl.conf" "$SYSCTL_ROOT"/sysctl.d/*.conf; do
     [[ -f $source && $source != "$SYSCTL_FILE" ]] || continue
     if grep -Eq '^[[:space:]]*(net\.core\.default_qdisc|net\.ipv4\.tcp_congestion_control)[[:space:]]*=' "$source"; then
       CONFLICT_FILES+=("$source")
@@ -111,7 +116,7 @@ find_conflicts() {
 require_no_conflicts() {
   find_conflicts
   (( ${#CONFLICT_FILES[@]} == 0 )) \
-    || die "发现其他配置也在管理 BBR/FQ：${CONFLICT_FILES[*]}；请先人工确认，插件不会争抢设置"
+    || die "发现其他配置也在管理 BBR/FQ：${CONFLICT_FILES[*]}；请先人工确认，主程序不会争抢设置"
 }
 
 command_name=${1:-help}
@@ -129,13 +134,13 @@ case "$command_name" in
     printf '当前队列规则：%s\n' "$(read_sysctl net.core.default_qdisc)"
     printf '内核可用算法：%s\n' "$(read_sysctl net.ipv4.tcp_available_congestion_control)"
     if [[ -f $SYSCTL_FILE ]] && effective_enabled; then
-      printf '插件状态：健康（BBR + FQ 已生效）\n'
+      printf '核心状态：健康（BBR + FQ 已生效）\n'
     elif [[ -f $SYSCTL_FILE ]]; then
-      printf '插件状态：配置存在但未完全生效，请运行 bbrctl health\n'
+      printf '核心状态：配置存在但未完全生效，请运行 bbrctl health\n'
     elif effective_enabled; then
-      printf '插件状态：BBR + FQ 由插件之外的配置启用，本插件不接管\n'
+      printf '核心状态：BBR + FQ 由其他配置启用，本项目不接管\n'
     else
-      printf '插件状态：未启用\n'
+      printf '核心状态：未启用\n'
     fi
     ;;
   check)
@@ -143,6 +148,18 @@ case "$command_name" in
     verify_bbr_supported
     printf '质检通过：系统和内核支持 BBR。当前设置如下：\n'
     "$0" status
+    ;;
+  preflight)
+    check_platform
+    verify_bbr_supported
+    find_conflicts
+    if [[ -f $SYSCTL_FILE && ${#CONFLICT_FILES[@]} -gt 0 ]]; then
+      die "核心 BBR 配置与其他 sysctl 来源冲突：${CONFLICT_FILES[*]}"
+    fi
+    if [[ ! -f $SYSCTL_FILE && ${#CONFLICT_FILES[@]} -gt 0 ]] && ! effective_enabled; then
+      die "其他 sysctl 配置正在管理相同参数且当前不是 BBR + FQ：${CONFLICT_FILES[*]}；安装前请人工确认"
+    fi
+    printf 'BBR 安装前质检通过：内核支持，配置来源没有不可控冲突。\n'
     ;;
   health)
     check_platform
@@ -154,18 +171,18 @@ case "$command_name" in
     fi
     if [[ ! -f $SYSCTL_FILE ]]; then
       if (( ${#CONFLICT_FILES[@]} > 0 )); then
-        printf '正常：检测到其他配置管理相关参数，本插件未启用也不接管：%s\n' "${CONFLICT_FILES[*]}"
+        printf '正常：检测到其他配置管理相关参数，本项目未接管：%s\n' "${CONFLICT_FILES[*]}"
         exit 0
       fi
       if effective_enabled; then
-        printf '健康：BBR + FQ 由其他机制启用；本插件保持未接管状态。\n'
+        printf '健康：BBR + FQ 由其他机制启用；本项目保持未接管状态。\n'
       else
-        printf '正常：插件尚未启用，系统继续使用当前设置。\n'
+        printf '正常：核心 BBR 开关已关闭，系统继续使用当前设置。\n'
       fi
       exit 0
     fi
-    effective_enabled || die "插件持久配置存在，但实际设置不是 BBR + FQ；可运行 bbrctl repair"
-    printf '健康：插件配置、BBR 和 FQ 均已生效。\n'
+    effective_enabled || die "核心持久配置存在，但实际设置不是 BBR + FQ；可运行 bbrctl repair"
+    printf '健康：核心配置、BBR 和 FQ 均已生效。\n'
     ;;
   enable)
     require_root
@@ -174,7 +191,7 @@ case "$command_name" in
     load_bbr
     verify_bbr_available
     if [[ ! -f $SYSCTL_FILE ]] && effective_enabled; then
-      printf 'BBR + FQ 已由其他机制启用；插件不会重复接管或覆盖原来源。\n'
+      printf 'BBR + FQ 已由其他机制启用；本项目不会重复接管或覆盖原来源。\n'
       exit 0
     fi
     if [[ -f $SYSCTL_FILE ]] && effective_enabled; then
@@ -192,7 +209,7 @@ case "$command_name" in
     }
     trap rollback_enable ERR
     cat >"$SYSCTL_FILE" <<'EOF'
-# Managed by the optional gost-socks-bbr plugin.
+# Managed by the gost-socks core BBR controller.
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 EOF
@@ -207,7 +224,7 @@ EOF
     require_root
     acquire_lock
     check_platform
-    [[ -f $SYSCTL_FILE ]] || die "插件没有持久配置，无需修复；请先运行 bbrctl check"
+    [[ -f $SYSCTL_FILE ]] || die "核心没有持久配置，无需修复；请先运行 bbrctl check"
     require_no_conflicts
     if effective_enabled; then
       printf 'BBR + FQ 已经健康生效，无需修复。\n'
@@ -232,7 +249,7 @@ EOF
     fi
     if [[ $confirmed != true ]]; then
       [[ -t 0 ]] || die "恢复网络设置必须在交互式 SSH/Xshell 窗口中确认"
-      printf '恢复会删除插件配置并切回首次启用前的网络设置。输入 RESTORE-BBR 确认：'
+      printf '恢复会关闭核心 BBR 开关并切回首次启用前的网络设置。输入 RESTORE-BBR 确认：'
       read -r restore_answer
       [[ $restore_answer == RESTORE-BBR ]] || die "已取消恢复"
     fi

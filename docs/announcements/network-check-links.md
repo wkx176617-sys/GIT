@@ -4,9 +4,9 @@
 [← 返回上一级：客户端导入与网络验收](../clients.md)　·　[⌂ 项目首页](../../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
 <!-- docs-nav:end -->
 
-更新日期：2026-08-13
+更新日期：2026-08-14
 
-这份公告用于检查两类网络：
+这份公告用于检查三类网络：
 
 1. 当前电脑、PowerShell 或 Xshell 实际使用的网络。
 2. 搭建完成后的比特浏览器窗口实际使用的 SOCKS5 网络。
@@ -26,6 +26,7 @@
 | 单独检查 DNS | [DNSLeakTest](https://www.dnsleaktest.com/) | 比特窗口 | 不出现本地运营商 DNS |
 | 一页综合复核 | [IPLeak](https://ipleak.net/) | 比特窗口 | IP、WebRTC、DNS 都不暴露本地网络 |
 | 查询位置、ASN 和网络类型 | [IPinfo](https://ipinfo.io/) | 普通浏览器或比特窗口 | 国家/地区符合采购信息；记录 ASN/组织 |
+| 测试吞吐、延迟和抖动 | [Cloudflare Speed Test](https://speed.cloudflare.com/) | 已确认出口的比特窗口 | 记录下载、上传、延迟、抖动和丢包 |
 
 检测网站属于第三方服务，结果可能因数据库、缓存和定位精度不同而不完全一致。不要只依赖一个网站判断住宅、机房、VPN 或代理属性。
 
@@ -160,6 +161,7 @@ DNS 服务器所在城市不一定与代理城市完全相同。公共 DNS、云
 5. 用 IPLeak 做一次综合复核。
 6. 用 IPinfo 记录国家、ASN 和网络组织。
 7. 关闭并重开比特窗口，再确认一次出口 IP。
+8. 需要验证速度时，再按[网络性能与核心 BBR](../network-performance.md)记录同条件性能基线。
 
 只有全部通过后，再登录业务账号。
 

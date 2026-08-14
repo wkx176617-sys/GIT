@@ -69,6 +69,8 @@ else
   SOCKS_PORT=$(read_env_value SOCKS_PORT)
   SOCKS_USERNAME=$(read_env_value SOCKS_USERNAME)
   SOCKS_PASSWORD=$(read_env_value SOCKS_PASSWORD)
+  BBR_POLICY=$(read_env_value BBR_POLICY)
+  [[ $BBR_POLICY == enabled || $BBR_POLICY == disabled ]] || BBR_POLICY=enabled
   [[ $NODE_NAME =~ ^[A-Za-z0-9._-]{2,32}$ ]] || NODE_NAME=未知
   public_ip_invalid=false
   if [[ -n $PUBLIC_IP && ! $PUBLIC_IP =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
@@ -77,6 +79,14 @@ else
   fi
   printf '节点：%s:%s\n' "${PUBLIC_IP:-${NODE_NAME:-未知}}" "${SOCKS_PORT:-未知}"
   printf '协议能力：SOCKS5 TCP；未启用 UDP 转发。\n'
+  current_qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null || true)
+  current_cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)
+  printf '核心加速：策略 %s；当前 %s + %s。\n' "$BBR_POLICY" "${current_cc:-未知}" "${current_qdisc:-未知}"
+  if [[ $BBR_POLICY == enabled && ( $current_cc != bbr || $current_qdisc != fq ) ]]; then
+    printf '警告 [BBR_INACTIVE]：节点要求开启 BBR + FQ，但当前设置未完整生效。\n'
+    record BBR_INACTIVE "policy-enabled-current-${current_cc:-unknown}-${current_qdisc:-unknown}"
+    warnings=$((warnings + 1))
+  fi
   env_mode=$(stat -c '%a' "$ENV_FILE")
   config_mode=$(stat -c '%a' "$CONFIG_FILE")
   config_owner=$(stat -c '%U:%G' "$CONFIG_FILE")

@@ -4,10 +4,11 @@ set -Eeuo pipefail
 usage() {
   cat <<'EOF'
 用法：
-  sudo bash xshell-install.sh [--port 31080] [--overwrite]
+  sudo bash xshell-install.sh [--port 31080] [--overwrite] [--no-bbr]
 
 此入口适用于 Windows Xshell 登录后的 Ubuntu 服务器。
 默认先质检再安装；使用 --overwrite 时只覆写可安全识别的旧 sing-box SOCKS5。
+BBR + FQ 默认开启；只有明确不需要时才添加 --no-bbr。
 EOF
 }
 
@@ -28,6 +29,8 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
   || die "项目缺少 scripts/socks-refresh-ip，请完整下载或上传本项目"
 [[ -f $script_dir/scripts/socks-upgrade ]] \
   || die "项目缺少 scripts/socks-upgrade，请完整下载或上传本项目"
+[[ -f $script_dir/scripts/bbrctl ]] \
+  || die "项目缺少 scripts/bbrctl，请完整下载或上传本项目"
 package_version=$(tr -d '[:space:]' <"$script_dir/VERSION")
 installer_version=$(bash "$script_dir/install.sh" --version)
 [[ $package_version == "$installer_version" ]] \
@@ -40,6 +43,8 @@ port=31080
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --overwrite) overwrite=true; shift ;;
+    --no-bbr) install_args+=(--no-bbr); shift ;;
+    --enable-bbr) install_args+=(--enable-bbr); shift ;;
     --port)
       [[ $# -ge 2 && $2 =~ ^[0-9]+$ ]] \
         || die "--port 后面必须是端口数字，例如 --port 31080"

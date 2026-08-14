@@ -5,7 +5,7 @@
 <!-- docs-nav:end -->
 
 本页只负责 Mac Terminal 连接 Ubuntu VPS 并完成安装。客户端导入、网络验收、故障维修和
-BBR 分别由专题教程负责。
+核心 BBR 默认自动开启，详细性能判断由专题教程负责。
 
 ## 首次安装主线
 
@@ -43,8 +43,8 @@ ssh root@你的VPS公网IP
 
 ```bash
 cd "$HOME/Desktop"
-git clone --branch v1.11.0 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.11.0
-cd "$HOME/Desktop/socks5-toolkit-v1.11.0"
+git clone --branch v1.12.0 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.12.0
+cd "$HOME/Desktop/socks5-toolkit-v1.12.0"
 ./deploy.sh root@你的VPS公网IP --port 31080
 ```
 

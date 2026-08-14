@@ -6,7 +6,7 @@
 
 **给第一次接触服务器的你，一条轻盈、清楚、可以回头的搭建路线。**
 
-[![stable v1.11.0](https://img.shields.io/badge/stable-v1.11.0-E5B8BE?style=flat-square)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.11.0)
+[![stable v1.12.0](https://img.shields.io/badge/stable-v1.12.0-E5B8BE?style=flat-square)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.12.0)
 [![checks](https://img.shields.io/github/actions/workflow/status/wkx176617-sys/GIT/validate.yml?label=checks&style=flat-square&labelColor=F3E8E4&color=A9B8A1)](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04_·_22.04_·_24.04-C98F96?style=flat-square)](docs/tutorial.md)
 [![GOST](https://img.shields.io/badge/GOST-3.2.6-A9B8A1?style=flat-square)](https://github.com/go-gost/gost/releases/tag/v3.2.6)
@@ -15,7 +15,7 @@
 
 </div>
 
-> 当前推荐稳定版本：`v1.11.0`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
+> 当前推荐稳定版本：`v1.12.0`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
 
 每台 Ubuntu VPS 运行一个轻量 GOST SOCKS5 节点，默认使用 `31080/TCP`。Mac 或 Windows
 只负责连接服务器和使用浏览器，不需要运行本项目后台服务。
@@ -63,16 +63,16 @@ socksctl guide
 | 复制客户端链接 | `socksctl export` |
 | VPS更换公网IP | `socksctl refresh-ip` |
 | 生成脱敏报告 | `socksctl report` |
+| 查看核心网络加速 | `socksctl bbr status` |
 
-## 可选插件
+## 核心网络加速与插件
 
-> 首次搭建不需要插件。没有明确问题时，保持不安装就是推荐选择。
+首次安装和没有明确记录的旧节点升级会默认开启 BBR + FQ；它不增加进程、端口或定时任务，
+并可通过 `socksctl bbr disable` 恢复本项目接管前的设置。适用边界与测速方法见
+[网络性能与核心 BBR](docs/network-performance.md)。
 
-| 当前插件 | 适合 | 不负责 | 入口 |
-|---|---|---|---|
-| BBR + FQ `1.1.1` | 部分高延迟、丢包 TCP 线路 | IP质量、DNS、WebRTC、加密、平台风控 | [查看插件](addons/bbr/README.md) |
-
-所有扩展统一登记在[可选插件中心](addons/README.md)。插件不会被主程序自动安装或启用。
+当前没有稳定插件，但[可选插件中心](addons/README.md)继续保留。未来非核心扩展仍必须独立安装、
+检查、恢复和卸载，不会被主程序自动启用。
 
 ## 遇到问题
 
@@ -117,6 +117,7 @@ socksctl report
 | 统一管理 | `socksctl` | 按需 |
 | 健康诊断 | `socks-doctor` | 按需、可严格只读 |
 | 安全恢复 | `socks-safety` | 按需 |
+| 核心网络加速 | `bbrctl` | 按需；默认策略为开启 |
 | 可选插件 | [插件中心](addons/README.md) | 用户明确启用 |
 
 更完整的职责和扩展边界见[模块索引](docs/modules.md)。

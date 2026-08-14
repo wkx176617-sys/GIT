@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 usage() {
   cat <<'EOF'
-用法：sudo bash overwrite.sh [--port 31080] [--yes]
+用法：sudo bash overwrite.sh [--port 31080] [--yes] [--no-bbr]
 
 仅在确认目标端口属于可识别的旧 sing-box SOCKS5 时，备份旧配置、迁移账号密码并安装 GOST。
 本工具不会自动覆写 x-ui、Xray、v2ray 或未知进程。
@@ -15,11 +15,14 @@ die() { printf '错误：%s\n' "$*" >&2; exit 1; }
 port=31080
 node_name=""
 confirmed=false
+install_options=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --port) [[ $# -ge 2 ]] || die "--port 缺少值"; port=$2; shift 2 ;;
     --name) [[ $# -ge 2 ]] || die "--name 缺少值"; node_name=$2; shift 2 ;;
     --yes) confirmed=true; shift ;;
+    --no-bbr) install_options+=(--no-bbr); shift ;;
+    --enable-bbr) install_options+=(--enable-bbr); shift ;;
     --help|-h) usage; exit 0 ;;
     *) die "未知参数：$1" ;;
   esac
@@ -62,7 +65,7 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 listener=$(ss -H -lntp 2>/dev/null | awk -v port=":$port" '$4 ~ port "$" {print}')
 if [[ -z $listener || ( $listener == *'"gost"'* && -f /etc/gost-socks/node.env ) ]]; then
   printf '未发现需要覆写的旧服务，转为安全的标准安装/升级。\n'
-  exec env SOCKS_LOCK_HELD=1 bash "$script_dir/install.sh" --port "$port" "${name_args[@]}"
+  exec env SOCKS_LOCK_HELD=1 bash "$script_dir/install.sh" --port "$port" "${name_args[@]}" "${install_options[@]}"
 fi
 
 [[ $listener == *'"sing-box"'* ]] \
@@ -107,7 +110,7 @@ trap rollback ERR
 
 systemctl disable --now sing-box
 MIGRATE_SOCKS_USERNAME=$username MIGRATE_SOCKS_PASSWORD=$password \
-  SOCKS_LOCK_HELD=1 bash "$script_dir/install.sh" --port "$port" "${name_args[@]}"
+  SOCKS_LOCK_HELD=1 bash "$script_dir/install.sh" --port "$port" "${name_args[@]}" "${install_options[@]}"
 /usr/local/sbin/socksctl check
 trap - ERR
 

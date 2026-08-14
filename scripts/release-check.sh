@@ -18,7 +18,7 @@ release_file="docs/releases/$tag.md"
    && -f docs/modules.md && -f docs/macos.md && -f docs/windows-xshell.md \
    && -f docs/clients.md && -f docs/visual-style.md && -f docs/upgrade.md \
    && -f docs/change-public-ip.md && -f docs/mobile-network-check.md \
-   && -f docs/bitbrowser-fail-closed.md && -f docs/navigation.md \
+   && -f docs/bitbrowser-fail-closed.md && -f docs/network-performance.md && -f docs/navigation.md \
    && -f docs/navigator/index.html && -f docs/navigator/style.css \
    && -f docs/navigator/app.js && -f docs/navigator/navigation.tsv \
    && -x scripts/docs-navigation && -f .github/workflows/docs-navigation.yml ]] \
@@ -103,8 +103,8 @@ grep -Fq '正常工作时只有 GOST 常驻' docs/architecture.md \
   || { printf '架构说明缺少按需运行边界\n' >&2; exit 1; }
 grep -Fq '## 修改路由' docs/modules.md \
   || { printf '模块索引缺少修改路由\n' >&2; exit 1; }
-[[ -f addons/README.md && -f addons/bbr/plugin.conf && -f addons/bbr/README.md ]] \
-  || { printf '缺少插件中心、BBR兼容声明或说明\n' >&2; exit 1; }
+[[ -f addons/README.md && -f scripts/bbrctl && -f docs/network-performance.md ]] \
+  || { printf '缺少插件中心、核心BBR控制器或网络性能说明\n' >&2; exit 1; }
 grep -Fq '[可选插件中心](addons/README.md)' README.md \
   || { printf 'README 未提供独立插件中心入口\n' >&2; exit 1; }
 while IFS= read -r plugin_conf; do
@@ -114,25 +114,15 @@ while IFS= read -r plugin_conf; do
   grep -Fq "($plugin_slug/README.md)" addons/README.md \
     || { printf '插件没有登记到插件中心：%s\n' "$plugin_slug" >&2; exit 1; }
 done < <(find addons -mindepth 2 -maxdepth 2 -name plugin.conf -type f | sort)
-# shellcheck disable=SC1091
-source addons/bbr/plugin.conf
-[[ ${PLUGIN_VERSION:-} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-  || { printf 'BBR 插件版本格式错误\n' >&2; exit 1; }
-[[ ${MAIN_MIN_VERSION:-} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && ${MAIN_MAX_MAJOR:-} =~ ^[0-9]+$ ]] \
-  || { printf 'BBR 插件主程序兼容声明格式错误\n' >&2; exit 1; }
-IFS=. read -r current_major current_minor current_patch <<<"$version"
-IFS=. read -r minimum_major minimum_minor minimum_patch <<<"$MAIN_MIN_VERSION"
-(( current_major <= MAIN_MAX_MAJOR )) || { printf 'BBR 插件尚未声明兼容主程序 %s\n' "$tag" >&2; exit 1; }
-if (( current_major < minimum_major \
-   || (current_major == minimum_major && current_minor < minimum_minor) \
-   || (current_major == minimum_major && current_minor == minimum_minor && current_patch < minimum_patch) )); then
-  printf 'BBR 插件要求主程序至少为 v%s\n' "$MAIN_MIN_VERSION" >&2
+grep -Fq 'BBR_POLICY=$bbr_policy' install.sh \
+  && grep -Fq '"$BBR_PATH" enable' install.sh \
+  && grep -Fq 'socksctl bbr disable' docs/network-performance.md \
+  && grep -Fq '目前没有稳定插件' addons/README.md \
+  || { printf '核心BBR默认策略、开关、说明或空插件中心不完整\n' >&2; exit 1; }
+if find addons -mindepth 2 -maxdepth 2 -name plugin.conf -type f | grep -q .; then
+  printf 'v1.12.0 插件中心应暂时为空\n' >&2
   exit 1
 fi
-grep -Fq "插件版本：\`$PLUGIN_VERSION\`" addons/bbr/README.md \
-  || { printf 'BBR 插件说明中的版本不一致\n' >&2; exit 1; }
-grep -Fq "BBR 插件 $PLUGIN_VERSION" "docs/releases/$tag.md" \
-  || { printf '当前版本说明未记录 BBR 插件版本\n' >&2; exit 1; }
 
 while IFS= read -r existing_tag; do
   [[ -f "docs/releases/$existing_tag.md" ]] || {
@@ -142,6 +132,7 @@ while IFS= read -r existing_tag; do
 done < <(git tag --list 'v*' --sort=version:refname)
 
 bash tests/syntax.sh
+bash tests/bbr-flow.sh
 bash tests/upgrade-flow.sh
 
 scripts/docs-navigation --check
@@ -149,13 +140,13 @@ scripts/docs-navigation --check
   docs/tutorial.md docs/macos.md docs/windows-xshell.md docs/clients.md docs/upgrade.md \
   docs/change-public-ip.md docs/troubleshooting.md docs/mobile-network-check.md \
   docs/bitbrowser-fail-closed.md docs/announcements/network-check-links.md \
-  addons/README.md addons/bbr/README.md | awk '{sum += $1} END {print sum}') -eq 12 ]] \
+  addons/README.md docs/network-performance.md | awk '{sum += $1} END {print sum}') -eq 12 ]] \
   || { printf '新手专题顶部导航数量不正确\n' >&2; exit 1; }
 [[ $(grep -Rhc '^<!-- docs-nav-bottom:start -->$' \
   docs/tutorial.md docs/macos.md docs/windows-xshell.md docs/clients.md docs/upgrade.md \
   docs/change-public-ip.md docs/troubleshooting.md docs/mobile-network-check.md \
   docs/bitbrowser-fail-closed.md docs/announcements/network-check-links.md \
-  addons/README.md addons/bbr/README.md | awk '{sum += $1} END {print sum}') -eq 12 ]] \
+  addons/README.md docs/network-performance.md | awk '{sum += $1} END {print sum}') -eq 12 ]] \
   || { printf '新手专题底部导航数量不正确\n' >&2; exit 1; }
 grep -Fq '不改变' docs/navigation.md && grep -Fq '第一次搭建总路线' docs/navigation.md \
   || { printf '文字导航缺少单一主线说明\n' >&2; exit 1; }
@@ -186,7 +177,7 @@ for route_file in docs/tutorial.md docs/macos.md docs/windows-xshell.md; do
     exit 1
   }
 done
-if rg -n 'socksctl[[:space:]]+qr|bbrctl[[:space:]]+(enable|repair|restore)' \
+if rg -n 'socksctl[[:space:]]+qr|socksctl[[:space:]]+bbr[[:space:]]+(enable|disable)|bbrctl[[:space:]]+(enable|repair|restore)' \
   docs/tutorial.md docs/macos.md docs/windows-xshell.md; then
   printf '新手路线重复了客户端二维码或插件操作，应链接唯一专题\n' >&2
   exit 1
@@ -213,6 +204,7 @@ grep -Fq '[安全切换稳定版本](upgrade.md)' docs/macos.md \
 
 link_failed=false
 while IFS= read -r markdown_file; do
+  [[ -f $markdown_file ]] || continue
   while IFS= read -r link_target; do
     case "$link_target" in
       http://*|https://*|mailto:*|'#'*|"") continue ;;

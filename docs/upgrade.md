@@ -5,7 +5,7 @@
 <!-- docs-nav:end -->
 
 本页只负责“已经确认服务器运行本项目，想保留节点信息并切换工具版本”的情况。SOCKS5 协议
-本身没有 `v1.11.0`；这里切换的是本项目的安装、管理、诊断和安全工具版本。
+本身没有 `v1.12.0`；这里切换的是本项目的安装、管理、诊断和安全工具版本。
 
 ## 先分清入口
 
@@ -31,13 +31,13 @@ apt-get install -y git ca-certificates
 ```
 
 ```bash
-git clone --branch v1.11.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.11.0
+git clone --branch v1.12.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.12.0
 ```
 
 然后只运行这一条推荐命令，自动选择 GitHub 最新稳定标签：
 
 ```bash
-bash /root/socks5-toolkit-v1.11.0/scripts/socks-upgrade latest
+bash /root/socks5-toolkit-v1.12.0/scripts/socks-upgrade latest
 ```
 
 命令会先自动完成只读检查，通过后直接执行，不再要求输入第二个确认口令。完成后服务器会安装
@@ -63,7 +63,10 @@ socksctl upgrade latest
 socksctl upgrade v目标版本号
 ```
 
-必须填写完整稳定标签，例如 `v1.11.0`，不能填写 `main` 或省略版本号。
+必须填写完整稳定标签，例如 `v1.12.0`，不能填写 `main` 或省略版本号。
+
+正常升级会保留已经明确保存的 BBR 开关；旧节点没有开关记录时默认开启。只在本次明确不需要
+BBR 时才在推荐升级命令末尾追加 `--no-bbr`，之后仍可用 `socksctl bbr enable` 重新开启。
 
 ## 可选：恢复到较旧版本
 

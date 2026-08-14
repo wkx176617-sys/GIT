@@ -21,18 +21,20 @@ usage() {
   cat <<'EOF'
 推荐用法：
   sudo socks-upgrade latest
-  sudo socks-upgrade v1.11.0
+  sudo socks-upgrade v1.12.0
 
 其他用法：
   sudo socks-upgrade --current
   sudo socks-upgrade --check latest
-  sudo socks-upgrade --check v1.11.0
+  sudo socks-upgrade --check v1.12.0
   sudo socks-upgrade v1.9.5 --allow-downgrade
+  sudo socks-upgrade latest --no-bbr
 
 只切换已经由本项目管理的 GOST SOCKS5 节点版本。不会用于首次安装或迁移其他代理。
 输入正式命令即视为授权执行，通过只读检查后不再重复询问。
 降到旧版只恢复身份一致且校验通过的健康快照，并要求在同一命令中明确添加 --allow-downgrade。
 --check 只供提前体检，不修改服务、配置或凭据。
+首次进入支持 BBR 的版本会默认开启加速；--no-bbr 可明确关闭，--enable-bbr 可重新开启。
 EOF
 }
 
@@ -80,7 +82,7 @@ validate_existing_node() {
 
 validate_target() {
   [[ $target_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-    || die "目标必须是 latest 或完整稳定标签，例如 v1.11.0；不接受 main 或省略版本号"
+    || die "目标必须是 latest 或完整稳定标签，例如 v1.12.0；不接受 main 或省略版本号"
   target_version=${target_tag#v}
   if [[ $current_version == "$target_version" ]]; then
     die "当前已经是 ${target_tag}，无需重复升级"
@@ -180,6 +182,7 @@ read_snapshot_value() {
 }
 
 allow_downgrade=false
+bbr_option=default
 case "${1:-}" in
   --help|-h) usage; exit 0 ;;
   --current)
@@ -187,7 +190,7 @@ case "${1:-}" in
     action=current
     ;;
   --check)
-    [[ $# -eq 2 ]] || die "用法：socks-upgrade --check latest 或 socks-upgrade --check v1.11.0"
+    [[ $# -eq 2 ]] || die "用法：socks-upgrade --check latest 或 socks-upgrade --check v1.12.0"
     target_request=$2
     action=check
     check_only=true
@@ -195,16 +198,20 @@ case "${1:-}" in
   latest|v[0-9]*.[0-9]*.[0-9]*)
     target_request=$1
     shift
-    if [[ ${1:-} == --allow-downgrade ]]; then
-      allow_downgrade=true
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --allow-downgrade) allow_downgrade=true ;;
+        --no-bbr) [[ $bbr_option == default ]] || die "BBR 开关参数不能重复"; bbr_option=disabled ;;
+        --enable-bbr) [[ $bbr_option == default ]] || die "BBR 开关参数不能重复"; bbr_option=enabled ;;
+        *) die "版本切换只接受目标版本、BBR 开关；降版时可追加 --allow-downgrade" ;;
+      esac
       shift
-    fi
-    [[ $# -eq 0 ]] || die "版本切换只接受目标版本；降版时可追加 --allow-downgrade"
+    done
     action=switch
     check_only=false
     ;;
   "") usage; exit 1 ;;
-  *) die "无法识别参数。目标必须是 latest 或类似 v1.11.0 的稳定标签" ;;
+  *) die "无法识别参数。目标必须是 latest 或类似 v1.12.0 的稳定标签" ;;
 esac
 
 [[ $TAG_CHECK_TIMEOUT_SECONDS =~ ^[0-9]+$ && $TAG_CHECK_TIMEOUT_SECONDS -ge 1 \
@@ -230,6 +237,9 @@ validate_target
 if [[ $allow_downgrade == true && $switch_direction != downgrade ]]; then
   die "--allow-downgrade 只用于切换到低于当前版本的健康快照"
 fi
+if [[ $switch_direction == downgrade && $bbr_option != default ]]; then
+  die "恢复旧版快照时不能同时改变 BBR 开关；请在版本切换完成后单独处理"
+fi
 if [[ $check_only == true && $target_request != latest ]]; then
   check_explicit_remote_tag
 fi
@@ -251,6 +261,13 @@ printf '  目标版本：%s\n' "$target_tag"
 printf '  切换方向：%s\n' "$([[ $switch_direction == downgrade ]] && printf '恢复旧版快照' || printf '更新到稳定版')"
 printf '  节点端口：%s（切换时保留）\n' "$port"
 printf '  账号密码：保留，不在此处显示\n'
+if [[ $switch_direction == upgrade ]]; then
+  case "$bbr_option" in
+    enabled) printf '  BBR策略：本次明确开启\n' ;;
+    disabled) printf '  BBR策略：本次明确关闭\n' ;;
+    default) printf '  BBR策略：保留明确选择；旧节点无记录时默认开启\n' ;;
+  esac
+fi
 if [[ $switch_direction == downgrade ]]; then
   printf '  恢复来源：%s（完整性与节点身份已通过）\n' "$snapshot_name"
 else
@@ -322,7 +339,17 @@ if [[ $switch_direction == downgrade ]]; then
 fi
 
 printf '开始事务切换；将保留节点IP记录、端口、用户名和密码。\n'
-SOCKS_LOCK_HELD=1 bash "$tmp_dir/package/install.sh" --port "$port" --preserve-node
+case "$bbr_option" in
+  enabled)
+    SOCKS_LOCK_HELD=1 bash "$tmp_dir/package/install.sh" --port "$port" --preserve-node --enable-bbr
+    ;;
+  disabled)
+    SOCKS_LOCK_HELD=1 bash "$tmp_dir/package/install.sh" --port "$port" --preserve-node --no-bbr
+    ;;
+  default)
+    SOCKS_LOCK_HELD=1 bash "$tmp_dir/package/install.sh" --port "$port" --preserve-node
+    ;;
+esac
 installed_version=$(read_env_value TOOL_VERSION)
 installed_node_name=$(read_env_value NODE_NAME)
 installed_public_ip=$(read_env_value PUBLIC_IP)

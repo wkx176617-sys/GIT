@@ -9,6 +9,7 @@
 | Mac部署 | `deploy.sh` | 核心入口 | 否 | SSH、SCP | 参数和帮助测试 |
 | Xshell部署 | `xshell-install.sh` | 核心入口 | 否 | Ubuntu基础命令 | 错误参数拦截 |
 | 安装升级 | `install.sh` | 核心 | 否 | systemd、curl、Ubuntu基础包 | 版本、依赖、核心复用、锁、有限启动验收 |
+| 网络加速 | `scripts/bbrctl` | 核心网络能力 | 否 | procps、kmod、util-linux | 支持、冲突、幂等、恢复、显式开关 |
 | 稳定版本切换 | `scripts/socks-upgrade` | 生命周期模块 | 否 | git、timeout、install、safety | latest、单次授权、快照降版、下载次数 |
 | 旧节点质检 | `preflight.sh` | 核心只读 | 否 | systemd、ss | 镜像和端口分类 |
 | 受控迁移 | `overwrite.sh` | 兼容模块 | 否 | install、旧sing-box | 备份和回退标记 |
@@ -23,12 +24,8 @@
 
 ## 可选插件
 
-| 插件 | 版本 | 兼容主程序 | 自动启用 | 影响 |
-|---|---:|---|---|---|
-| BBR + FQ | `1.1.1` | `v1.4.0` 至当前 `v1.x` | 否 | 修改明确的 sysctl；不增加端口和常驻进程 |
-
-插件必须留在 `addons/插件名/`，提供独立说明、安装、健康检查、恢复/卸载和兼容声明。主程序
-不得直接调用或自动启用插件，并且必须登记到 `addons/README.md` 插件中心。
+当前没有稳定插件。插件板块保留；未来插件必须留在 `addons/插件名/`，提供独立说明、安装、
+健康检查、恢复/卸载和兼容声明。主程序不得直接调用或自动启用插件，并且必须登记到插件中心。
 
 ## 文档模块
 
@@ -47,6 +44,7 @@
 | `docs/mobile-network-check.md` | 手机Wi-Fi、流量、VPN和客户端出口检查 |
 | `docs/bitbrowser-fail-closed.md` | 比特浏览器网络错误停止、白名单和破坏性验收 |
 | `docs/upgrade.md` | 已有本项目节点切换最新版、新版或健康快照旧版的唯一教程 |
+| `docs/network-performance.md` | 线路性能诊断、核心 BBR 开关和恢复边界的唯一教程 |
 | `docs/visual-style.md` | GitHub公开界面的配色、层级、文案和图片预算 |
 | `docs/troubleshooting.md` | 故障检查、恢复边界和Codex提问模板 |
 | `docs/project-principles.md` | 宗旨、性能预算和功能准入规则 |
@@ -65,7 +63,8 @@
 - 快照、事件、校验、熔断：改 `socks-safety`，不要让 `socksctl` 自己保存状态。
 - 用户命令和菜单：改 `socksctl`，复杂实现应下沉到对应模块。
 - 教程返回、首页、搜索词或分类：只改 `docs/navigator/navigation.tsv`，再运行导航生成器。
-- 可选加速或未来非必要能力：进入 `addons/`，不得并入默认安装。
+- BBR 状态、冲突、开关或恢复：改 `scripts/bbrctl` 和网络性能专题。
+- 未来非核心能力：进入 `addons/`，不得并入默认安装。
 - 只需解释的偶发问题：优先更新教程，不增加代码。
 
 ## 模块变更验收

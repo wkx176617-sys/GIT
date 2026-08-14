@@ -89,18 +89,27 @@ config_dir=${SOCKS_CONFIG_DIR:?}
 env_file="$config_dir/node.env"
 port=""
 preserve_node=false
+bbr_policy=enabled
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --port) port=${2:-}; shift 2 ;;
     --preserve-node) preserve_node=true; shift ;;
+    --no-bbr) bbr_policy=disabled; shift ;;
+    --enable-bbr) bbr_policy=enabled; shift ;;
     *) printf 'fixture installer received unknown argument: %s\n' "$1" >&2; exit 1 ;;
   esac
 done
 [[ $preserve_node == true ]] || { printf 'fixture installer requires preserve mode\n' >&2; exit 1; }
 existing_port=$(awk -F= '$1 == "SOCKS_PORT" {print $2}' "$env_file")
 [[ $port == "$existing_port" ]] || { printf 'fixture port changed\n' >&2; exit 1; }
-awk -F= '$1 == "TOOL_VERSION" {print "TOOL_VERSION=1.10.0"; found=1; next} \
-  {print} END {if (!found) print "TOOL_VERSION=1.10.0"}' \
+awk -F= -v bbr="$bbr_policy" '
+  $1 == "TOOL_VERSION" {print "TOOL_VERSION=1.10.0"; version_found=1; next}
+  $1 == "BBR_POLICY" {print "BBR_POLICY=" bbr; bbr_found=1; next}
+  {print}
+  END {
+    if (!version_found) print "TOOL_VERSION=1.10.0"
+    if (!bbr_found) print "BBR_POLICY=" bbr
+  }' \
   "$env_file" >"$env_file.next"
 mv "$env_file.next" "$env_file"
 EOF
@@ -121,15 +130,16 @@ upgrade_environment=(
   "SOCKS_SNAPSHOT_ROOT=$snapshot_root"
 )
 
-before_identity=$(awk -F= '$1 != "TOOL_VERSION" {print}' "$config_dir/node.env")
+before_identity=$(awk -F= '$1 != "TOOL_VERSION" && $1 != "BBR_POLICY" {print}' "$config_dir/node.env")
 upgrade_output=$(env "${upgrade_environment[@]}" \
   "$project_dir/scripts/socks-upgrade" latest 2>&1)
-after_identity=$(awk -F= '$1 != "TOOL_VERSION" {print}' "$config_dir/node.env")
+after_identity=$(awk -F= '$1 != "TOOL_VERSION" && $1 != "BBR_POLICY" {print}' "$config_dir/node.env")
 
 grep -Fq '版本切换只读检查通过' <<<"$upgrade_output"
 grep -Fq '目标版本：v1.10.0' <<<"$upgrade_output"
 grep -Fq '安全版本切换完成：1.9.5 → v1.10.0' <<<"$upgrade_output"
 grep -Fq 'TOOL_VERSION=1.10.0' "$config_dir/node.env"
+grep -Fq 'BBR_POLICY=enabled' "$config_dir/node.env"
 if grep -Eq '输入 (UPGRADE|DOWNGRADE)' <<<"$upgrade_output"; then
   printf '正式版本切换不应要求第二次输入确认口令。\n' >&2
   exit 1
@@ -162,7 +172,7 @@ downgrade_output=$(env "${upgrade_environment[@]}" \
   "$project_dir/scripts/socks-upgrade" v1.9.5 --allow-downgrade)
 grep -Fq '使用本机健康快照，无需下载' <<<"$downgrade_output"
 grep -Fq 'TOOL_VERSION=1.9.5' "$config_dir/node.env"
-after_downgrade_identity=$(awk -F= '$1 != "TOOL_VERSION" {print}' "$config_dir/node.env")
+after_downgrade_identity=$(awk -F= '$1 != "TOOL_VERSION" && $1 != "BBR_POLICY" {print}' "$config_dir/node.env")
 [[ $before_identity == "$after_downgrade_identity" ]] || {
   printf '恢复旧版改变了节点身份、IP、端口或凭据。\n' >&2
   exit 1
@@ -170,9 +180,10 @@ after_downgrade_identity=$(awk -F= '$1 != "TOOL_VERSION" {print}' "$config_dir/n
 
 : >"$git_calls"
 exact_upgrade_output=$(env "${upgrade_environment[@]}" \
-  "$project_dir/scripts/socks-upgrade" v1.10.0 2>&1)
+  "$project_dir/scripts/socks-upgrade" v1.10.0 --no-bbr 2>&1)
 grep -Fq '安全版本切换完成：1.9.5 → v1.10.0' <<<"$exact_upgrade_output"
 grep -Fq 'clone --quiet --branch v1.10.0 --depth 1' "$git_calls"
+grep -Fq 'BBR_POLICY=disabled' "$config_dir/node.env"
 if grep -Fq 'ls-remote' "$git_calls"; then
   printf '指定稳定标签的正式切换不应在 clone 前重复查询远端。\n' >&2
   exit 1
@@ -187,4 +198,4 @@ fi
 grep -Fq '查询稳定标签超时或失败' <<<"$timeout_output"
 grep -Fq 'TOOL_VERSION=1.10.0' "$config_dir/node.env"
 
-printf '最新版、单次授权、健康快照降版、单次下载、凭据保留和超时停止测试通过。\n'
+printf '最新版、BBR开关、单次授权、健康快照降版、单次下载、凭据保留和超时停止测试通过。\n'

@@ -4,7 +4,7 @@ set -Eeuo pipefail
 usage() {
   cat <<'EOF'
 用法：
-  ./deploy.sh <SSH目标> [--port <端口>] [--overwrite]
+  ./deploy.sh <SSH目标> [--port <端口>] [--overwrite] [--no-bbr]
 
 示例：
   ./deploy.sh root@203.0.113.10
@@ -12,6 +12,7 @@ usage() {
 
 节点名称默认自动使用 VPS 公网 IP。特殊情况下仍可通过 --name 自定义。
 默认只做安全安装；--overwrite 仅迁移可识别的旧 sing-box SOCKS5。
+BBR + FQ 默认开启；只有明确不需要时才添加 --no-bbr。
 EOF
 }
 
@@ -28,6 +29,7 @@ shift
 node_name=""
 port=31080
 overwrite=false
+bbr_option=default
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,6 +47,8 @@ while [[ $# -gt 0 ]]; do
       overwrite=true
       shift
       ;;
+    --no-bbr) [[ $bbr_option == default ]] || die "BBR 开关参数不能重复"; bbr_option=disabled; shift ;;
+    --enable-bbr) [[ $bbr_option == default ]] || die "BBR 开关参数不能重复"; bbr_option=enabled; shift ;;
     --help|-h)
       usage
       exit 0
@@ -66,7 +70,7 @@ for command_name in ssh scp; do
 done
 
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-for required_file in VERSION install.sh uninstall.sh preflight.sh overwrite.sh scripts/socksctl scripts/socks-doctor scripts/socks-safety scripts/socks-refresh-ip scripts/socks-upgrade; do
+for required_file in VERSION install.sh uninstall.sh preflight.sh overwrite.sh scripts/socksctl scripts/socks-doctor scripts/socks-safety scripts/socks-refresh-ip scripts/socks-upgrade scripts/bbrctl; do
   [[ -f "$project_dir/$required_file" ]] || die "缺少项目文件：$required_file"
 done
 
@@ -90,13 +94,15 @@ scp "${ssh_options[@]}" "$project_dir/VERSION" "$project_dir/install.sh" "$proje
   "$project_dir/preflight.sh" "$project_dir/overwrite.sh" "$target:$remote_dir/"
 scp "${ssh_options[@]}" "$project_dir/scripts/socksctl" "$project_dir/scripts/socks-doctor" \
   "$project_dir/scripts/socks-safety" "$project_dir/scripts/socks-refresh-ip" \
-  "$project_dir/scripts/socks-upgrade" \
+  "$project_dir/scripts/socks-upgrade" "$project_dir/scripts/bbrctl" \
   "$target:$remote_dir/scripts/"
 
 install_args="--port '$port'"
 if [[ -n $node_name ]]; then
   install_args+=" --name '$node_name'"
 fi
+[[ $bbr_option == disabled ]] && install_args+=" --no-bbr"
+[[ $bbr_option == enabled ]] && install_args+=" --enable-bbr"
 printf '正在安装节点（名称自动使用公网 IP，端口 %s）...\n' "$port"
 if [[ $overwrite == true ]]; then
   remote_command="if [ \"\$(id -u)\" -eq 0 ]; then bash '$remote_dir/overwrite.sh' $install_args; else sudo bash '$remote_dir/overwrite.sh' $install_args; fi"

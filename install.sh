@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
-readonly TOOL_VERSION_CURRENT="1.11.0"
+readonly TOOL_VERSION_CURRENT="1.12.0"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -15,15 +15,17 @@ readonly DOCTOR_PATH="/usr/local/sbin/socks-doctor"
 readonly SAFETY_PATH="/usr/local/sbin/socks-safety"
 readonly REFRESH_IP_PATH="/usr/local/sbin/socks-refresh-ip"
 readonly UPGRADE_PATH="/usr/local/sbin/socks-upgrade"
+readonly BBR_PATH="/usr/local/sbin/bbrctl"
 readonly LOCK_FILE="/run/lock/gost-socks-main.lock"
 
 usage() {
   cat <<'EOF'
 用法：
-  sudo bash install.sh [--port 31080] [--allow-downgrade]
+  sudo bash install.sh [--port 31080] [--no-bbr] [--allow-downgrade]
 
 节点名称默认使用 VPS 公网 IP。用户名和密码会在首次安装时自动生成。
 重复安装会保留已有名称和凭据；特殊情况下可以使用 --name 自定义。
+首次安装和旧版升级默认开启 BBR + FQ；--no-bbr 明确关闭，--enable-bbr 可重新开启。
 --allow-downgrade 是高级人工回退的一次性明确授权，不再追加第二次口令确认。
 EOF
 }
@@ -38,7 +40,7 @@ install_ubuntu_dependencies() {
   export DEBIAN_FRONTEND=noninteractive
   printf '正在补齐 Ubuntu 运行依赖（仅缺失时执行一次 apt 更新）...\n'
   apt-get update
-  apt-get install -y ca-certificates coreutils curl findutils iproute2 passwd qrencode tar util-linux
+  apt-get install -y ca-certificates coreutils curl findutils iproute2 kmod passwd procps qrencode tar util-linux
 }
 
 [[ ${1:-} != "--help" && ${1:-} != "-h" ]] || { usage; exit 0; }
@@ -55,6 +57,8 @@ existing_password=""
 existing_public_ip=""
 allow_downgrade=false
 preserve_node=false
+bbr_option=default
+existing_bbr_policy=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -62,6 +66,8 @@ while [[ $# -gt 0 ]]; do
     --port) [[ $# -ge 2 ]] || die "--port 缺少值"; port=$2; shift 2 ;;
     --allow-downgrade) allow_downgrade=true; shift ;;
     --preserve-node) preserve_node=true; shift ;;
+    --no-bbr) [[ $bbr_option == default ]] || die "BBR 开关参数不能重复"; bbr_option=disabled; shift ;;
+    --enable-bbr) [[ $bbr_option == default ]] || die "BBR 开关参数不能重复"; bbr_option=enabled; shift ;;
     --help|-h) usage; exit 0 ;;
     *) die "未知参数：$1" ;;
   esac
@@ -72,7 +78,7 @@ done
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.11.0 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.12.0 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
@@ -89,7 +95,7 @@ if [[ ${SOCKS_LOCK_HELD:-0} != 1 ]]; then
 fi
 
 missing_dependency=false
-for dependency_command in base64 curl find qrencode sha256sum ss tar useradd; do
+for dependency_command in base64 curl find modinfo qrencode sha256sum ss sysctl tar useradd; do
   command -v "$dependency_command" >/dev/null 2>&1 || missing_dependency=true
 done
 if [[ $missing_dependency == true && $dependencies_bootstrapped != true ]]; then
@@ -108,6 +114,7 @@ if [[ -f $ENV_FILE ]]; then
   SOCKS_USERNAME=$(read_env_value SOCKS_USERNAME)
   SOCKS_PASSWORD=$(read_env_value SOCKS_PASSWORD)
   TOOL_VERSION=$(read_env_value TOOL_VERSION)
+  existing_bbr_policy=$(read_env_value BBR_POLICY)
   existing_node_name=$NODE_NAME
   existing_port=$SOCKS_PORT
   existing_username=$SOCKS_USERNAME
@@ -120,6 +127,15 @@ if [[ -f $ENV_FILE ]]; then
   existing_tool_version=${TOOL_VERSION:-legacy}
 fi
 existing_tool_version=${existing_tool_version:-none}
+if [[ $bbr_option == default ]]; then
+  if [[ $existing_bbr_policy == enabled || $existing_bbr_policy == disabled ]]; then
+    bbr_policy=$existing_bbr_policy
+  else
+    bbr_policy=enabled
+  fi
+else
+  bbr_policy=$bbr_option
+fi
 
 if [[ $preserve_node == true ]]; then
   [[ -f $ENV_FILE ]] || die "--preserve-node 只允许用于已有本项目节点"
@@ -187,7 +203,7 @@ case "$(uname -m)" in
   *) die "不支持的 CPU 架构：$(uname -m)" ;;
 esac
 
-for required_command in base64 curl find install qrencode sha256sum ss systemctl tar useradd; do
+for required_command in base64 curl find install modinfo qrencode sha256sum ss sysctl systemctl tar useradd; do
   command -v "$required_command" >/dev/null 2>&1 || die "缺少系统命令：$required_command"
 done
 
@@ -225,8 +241,16 @@ refresh_ip_source="$script_dir/scripts/socks-refresh-ip"
 [[ -f $refresh_ip_source ]] || die "安装包缺少 scripts/socks-refresh-ip；请重新下载完整稳定版"
 upgrade_source="$script_dir/scripts/socks-upgrade"
 [[ -f $upgrade_source ]] || die "安装包缺少 scripts/socks-upgrade；请重新下载完整稳定版"
+bbr_source="$script_dir/scripts/bbrctl"
+[[ -f $bbr_source ]] || die "安装包缺少 scripts/bbrctl；请重新下载完整稳定版"
 uninstall_source="$script_dir/uninstall.sh"
 [[ -f $uninstall_source ]] || die "安装包缺少 uninstall.sh"
+
+if [[ $bbr_policy == enabled ]]; then
+  bash "$bbr_source" preflight >/dev/null
+fi
+bbr_managed_before=false
+[[ -f /etc/sysctl.d/99-gost-socks-bbr.conf ]] && bbr_managed_before=true
 
 if [[ -d /var/lib/gost-socks-safety/snapshots/last-good ]]; then
   bash "$safety_source" verify /var/lib/gost-socks-safety/snapshots/last-good >/dev/null \
@@ -241,9 +265,19 @@ if [[ $existing_tool_version == "$TOOL_VERSION_CURRENT" \
    && -x $DOCTOR_PATH \
    && -x $REFRESH_IP_PATH \
    && -x $UPGRADE_PATH \
+   && -x $BBR_PATH \
    && -d /var/lib/gost-socks-safety/snapshots/last-good \
    && $(systemctl is-active gost-socks.service 2>/dev/null || true) == active ]]; then
-  if "$DOCTOR_PATH" --local >/dev/null 2>&1; then
+  installed_bbr_policy=$(read_env_value BBR_POLICY)
+  bbr_state_ok=false
+  if [[ $installed_bbr_policy == "$bbr_policy" && $installed_bbr_policy == disabled ]]; then
+    bbr_state_ok=true
+  elif [[ $installed_bbr_policy == "$bbr_policy" && $installed_bbr_policy == enabled \
+       && $(sysctl -n net.core.default_qdisc 2>/dev/null || true) == fq \
+       && $(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true) == bbr ]]; then
+    bbr_state_ok=true
+  fi
+  if [[ $bbr_state_ok == true ]] && "$DOCTOR_PATH" --local >/dev/null 2>&1; then
     printf '当前已是 v%s，配置与服务均正常；重复安装已安全跳过。\n' "$TOOL_VERSION_CURRENT"
     exit 0
   fi
@@ -290,6 +324,12 @@ install_rollback() {
   local detail=${4:-unexpected-install-failure-line-$line-status-$status}
   trap - ERR
   set +e
+  if [[ $bbr_managed_before == false && -f /etc/sysctl.d/99-gost-socks-bbr.conf \
+     && -f /var/lib/gost-socks-bbr/original.conf ]]; then
+    bash "$bbr_source" restore --yes >/dev/null 2>&1 || true
+  elif [[ $bbr_managed_before == true && ! -f /etc/sysctl.d/99-gost-socks-bbr.conf ]]; then
+    bash "$bbr_source" enable >/dev/null 2>&1 || true
+  fi
   incident_id=$(bash "$safety_source" incident "$code" rollback pending "$detail")
   if [[ -n $transaction_snapshot ]]; then
     bash "$safety_source" restore "$transaction_snapshot" >/dev/null 2>&1
@@ -325,6 +365,7 @@ SOCKS_PORT=$port
 SOCKS_USERNAME=$username
 SOCKS_PASSWORD=$password
 TOOL_VERSION=$TOOL_VERSION_CURRENT
+BBR_POLICY=$bbr_policy
 EOF
 chmod 0600 "$env_temp"
 mv -f "$env_temp" "$ENV_FILE"
@@ -354,6 +395,7 @@ install -m 0755 "$doctor_source" "$DOCTOR_PATH"
 install -m 0755 "$safety_source" "$SAFETY_PATH"
 install -m 0755 "$refresh_ip_source" "$REFRESH_IP_PATH"
 install -m 0755 "$upgrade_source" "$UPGRADE_PATH"
+install -m 0755 "$bbr_source" "$BBR_PATH"
 
 service_temp=$(mktemp /etc/systemd/system/.gost-socks.service.XXXXXX)
 cat >"$service_temp" <<EOF
@@ -409,6 +451,16 @@ if [[ $service_ready != true ]]; then
   install_rollback "$LINENO" 1 INSTALL_SERVICE_NOT_READY "port-$port-not-ready-after-15-attempts"
 fi
 
+if [[ $bbr_policy == enabled ]]; then
+  printf '正在启用核心 BBR + FQ 网络加速...\n'
+  "$BBR_PATH" enable
+elif [[ -f /var/lib/gost-socks-bbr/original.conf ]]; then
+  printf '已选择关闭核心 BBR，正在恢复首次启用前的网络设置...\n'
+  "$BBR_PATH" restore --yes
+else
+  printf '核心 BBR 开关：已关闭；系统网络设置保持不变。\n'
+fi
+
 doctor_status=0
 "$DOCTOR_PATH" || doctor_status=$?
 if [[ $doctor_status -ne 0 ]]; then
@@ -446,6 +498,7 @@ GOST SOCKS5 节点安装成功
 用户名：  $username
 密码：    $password
 服务：    gost-socks.service
+BBR：     $([[ $bbr_policy == enabled ]] && printf '已开启（BBR + FQ）' || printf '已关闭')
 ============================================================
 
 下一步：
