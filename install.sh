@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
-readonly TOOL_VERSION_CURRENT="1.9.4"
+readonly TOOL_VERSION_CURRENT="1.9.5"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -73,7 +73,7 @@ done
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.9.4 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.9.5 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
@@ -253,19 +253,31 @@ trap cleanup EXIT
 
 archive="gost_${GOST_VERSION}_linux_${asset_arch}.tar.gz"
 download_url="https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}/${archive}"
+downloaded_binary=""
 
-printf '下载 GOST %s (%s)...\n' "$GOST_VERSION" "$asset_arch"
-curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
-  --connect-timeout 10 --max-time 120 \
-  "$download_url" --output "$tmp_dir/$archive"
+if [[ $preserve_node == true && -x $BINARY_PATH ]]; then
+  existing_gost_identity=$("$BINARY_PATH" -V 2>&1 | awk 'NR == 1 {print $1 " " $2}' || true)
+  if [[ $existing_gost_identity == "gost v$GOST_VERSION" ]]; then
+    downloaded_binary=$BINARY_PATH
+    printf '现有 GOST %s 版本验收通过；本次工具升级复用现有核心，不重复下载。\n' \
+      "$GOST_VERSION"
+  fi
+fi
 
-actual_sha=$(sha256sum "$tmp_dir/$archive" | awk '{print $1}')
-[[ $actual_sha == "$expected_sha" ]] || die "GOST 下载文件 SHA-256 校验失败"
+if [[ -z $downloaded_binary ]]; then
+  printf '下载 GOST %s (%s)...\n' "$GOST_VERSION" "$asset_arch"
+  curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+    --connect-timeout 10 --max-time 300 \
+    "$download_url" --output "$tmp_dir/$archive"
 
-mkdir -p "$tmp_dir/extracted"
-tar -xzf "$tmp_dir/$archive" -C "$tmp_dir/extracted"
-downloaded_binary=$(find "$tmp_dir/extracted" -type f -name gost -print -quit)
-[[ -n $downloaded_binary ]] || die "归档内未找到 gost 可执行文件"
+  actual_sha=$(sha256sum "$tmp_dir/$archive" | awk '{print $1}')
+  [[ $actual_sha == "$expected_sha" ]] || die "GOST 下载文件 SHA-256 校验失败"
+
+  mkdir -p "$tmp_dir/extracted"
+  tar -xzf "$tmp_dir/$archive" -C "$tmp_dir/extracted"
+  downloaded_binary=$(find "$tmp_dir/extracted" -type f -name gost -print -quit)
+  [[ -n $downloaded_binary ]] || die "归档内未找到 gost 可执行文件"
+fi
 
 transaction_snapshot=$(bash "$safety_source" snapshot 2>/dev/null || true)
 if [[ $preserve_node == true && -z $transaction_snapshot ]]; then
