@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="GOST SOCKS5 新手教程的轻量搜索与快速导航。">
+  <meta name="color-scheme" content="light">
+  <title>快速导航 · GOST SOCKS5</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip-link" href="#results">跳到搜索结果</a>
+  <header class="topbar">
+    <a class="brand" href="https://github.com/wkx176617-sys/GIT" aria-label="返回项目首页">
+      <span class="brand-mark" aria-hidden="true">●</span>
+      softly connected
+    </a>
+    <a class="home-link" href="https://github.com/wkx176617-sys/GIT">项目首页</a>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">轻量教程导航</p>
+      <h1 id="page-title">现在想解决什么？</h1>
+      <p class="intro">输入“二维码”“Xshell”“更新”或“连接不上”，直接找到对应教程。</p>
+
+      <div class="search-shell">
+        <label class="visually-hidden" for="search">搜索教程</label>
+        <span class="search-symbol" aria-hidden="true">⌕</span>
+        <input id="search" type="search" inputmode="search" autocomplete="off"
+               placeholder="搜索教程、客户端或故障……" aria-controls="results" aria-describedby="search-tip">
+        <button id="clear" class="clear-button" type="button" hidden>清空</button>
+      </div>
+      <p id="search-tip" class="search-tip">可使用方向键选择，按回车打开。搜索只在当前浏览器中进行。</p>
+      <div id="categories" class="category-list" aria-label="按分类筛选"></div>
+    </section>
+
+    <section class="results-section" aria-labelledby="results-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">推荐入口</p>
+          <h2 id="results-title">从这里继续</h2>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </div>
+      <div id="results" class="result-grid"></div>
+      <div id="empty" class="empty-state" hidden>
+        <p>没有找到完全匹配的教程。</p>
+        <a href="https://github.com/wkx176617-sys/GIT/blob/main/docs/navigation.md">查看全部文字导航</a>
+      </div>
+      <noscript>
+        <div class="empty-state">
+          <p>浏览器没有启用 JavaScript，搜索框暂时不可用。</p>
+          <a href="https://github.com/wkx176617-sys/GIT/blob/main/docs/navigation.md">使用全部文字导航</a>
+        </div>
+      </noscript>
+    </section>
+
+    <aside class="safety-note" aria-label="使用提示">
+      <strong>不会影响你的代理。</strong>
+      这个页面只读取公开教程索引，不连接 VPS，不读取账号、密码或二维码。
+    </aside>
+  </main>
+
+  <footer>
+    <p>v1.11.0 文档导航 · 无后台服务 · 无统计追踪 · <a href="https://github.com/wkx176617-sys/GIT/blob/main/docs/navigation.md">文字后备入口</a></p>
+  </footer>
+  <script src="app.js" defer></script>
+</body>
+</html>

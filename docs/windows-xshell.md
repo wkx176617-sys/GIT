@@ -1,5 +1,9 @@
 # Windows + Xshell 部署指南
 
+<!-- docs-nav:start -->
+[← 返回上一级：第一次搭建总路线](tutorial.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav:end -->
+
 本页只负责 Windows 10/11 使用 Xshell 8 连接 Ubuntu VPS 并完成安装。客户端导入、网络验收、
 故障维修和 BBR 分别由专题教程负责。
 
@@ -46,8 +50,8 @@ root@server:~#
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.10.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.10.0
-bash /root/socks5-toolkit-v1.10.0/xshell-install.sh --port 31080
+git clone --branch v1.11.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.11.0
+bash /root/socks5-toolkit-v1.11.0/xshell-install.sh --port 31080
 ```
 
 程序会先做只读质检，再安装固定版本 GOST。节点名称自动使用 VPS 公网 IP。安装成功后立即
@@ -68,12 +72,12 @@ socksctl guide
 
 只有第三步的 `git clone` 明确失败时才使用：
 
-1. 在 Windows 下载本项目 `v1.10.0` 源码压缩包并解压。
-2. 使用 Xshell 远程文件管理器或 Xftp，把整个目录上传到 `/root/socks5-toolkit-v1.10.0`。
+1. 在 Windows 下载本项目 `v1.11.0` 源码压缩包并解压。
+2. 使用 Xshell 远程文件管理器或 Xftp，把整个目录上传到 `/root/socks5-toolkit-v1.11.0`。
 3. 回到 `root@...#` 运行：
 
 ```bash
-bash /root/socks5-toolkit-v1.10.0/xshell-install.sh --port 31080
+bash /root/socks5-toolkit-v1.11.0/xshell-install.sh --port 31080
 ```
 
 ## 可选情况：旧节点已经占用端口
@@ -81,7 +85,7 @@ bash /root/socks5-toolkit-v1.10.0/xshell-install.sh --port 31080
 标准安装会先质检。只有报告明确显示“可迁移：旧 sing-box SOCKS5”时才运行：
 
 ```bash
-bash /root/socks5-toolkit-v1.10.0/xshell-install.sh --port 31080 --overwrite
+bash /root/socks5-toolkit-v1.11.0/xshell-install.sh --port 31080 --overwrite
 ```
 
 它会备份并保留可识别的旧凭据。检测到 x-ui、Xray、v2ray 或未知程序时会停止；不要强行
@@ -100,3 +104,7 @@ bash /root/socks5-toolkit-v1.10.0/xshell-install.sh --port 31080 --overwrite
 - 协议安装后异常：不要重复粘贴安装命令，进入[故障处理教程](troubleshooting.md)。
 
 下一步只有一个：[客户端导入与网络验收](clients.md)。
+
+<!-- docs-nav-bottom:start -->
+[← 返回上一级：第一次搭建总路线](tutorial.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav-bottom:end -->

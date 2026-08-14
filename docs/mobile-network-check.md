@@ -1,5 +1,9 @@
 # 手机网络环境检查
 
+<!-- docs-nav:start -->
+[← 返回上一级：客户端导入与网络验收](clients.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav:end -->
+
 本页用于检查手机本身以及小火箭等客户端启用后的出口。它不替代电脑上的比特浏览器验收；
 手机和电脑是两套独立网络环境，必须分别检查。
 
@@ -59,3 +63,7 @@
 
 手机检测通过只代表手机当前网络，不代表 Mac、Windows 或比特浏览器也通过。下一步只有一个：
 [客户端导入与网络验收](clients.md)。
+
+<!-- docs-nav-bottom:start -->
+[← 返回上一级：客户端导入与网络验收](clients.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav-bottom:end -->

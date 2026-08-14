@@ -1,5 +1,9 @@
 # 可选插件中心
 
+<!-- docs-nav:start -->
+[← 返回上一级：教程导航](../docs/navigation.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav:end -->
+
 插件是首次搭建完成后的可选能力，不属于 SOCKS5 主流程。主程序不会自动安装、启用、维修或
 卸载任何插件；不确定是否需要时，保持不安装就是推荐选择。
 
@@ -20,3 +24,7 @@
 
 插件必须独立提供版本、兼容范围、安装、检查、恢复和卸载说明。新增插件还必须在本页登记，
 并通过主项目发布检查。
+
+<!-- docs-nav-bottom:start -->
+[← 返回上一级：教程导航](../docs/navigation.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav-bottom:end -->

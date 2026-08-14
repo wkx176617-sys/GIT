@@ -1,7 +1,11 @@
 # 安全切换稳定版本
 
+<!-- docs-nav:start -->
+[← 返回上一级：教程导航](navigation.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav:end -->
+
 本页只负责“已经确认服务器运行本项目，想保留节点信息并切换工具版本”的情况。SOCKS5 协议
-本身没有 `v1.10.0`；这里切换的是本项目的安装、管理、诊断和安全工具版本。
+本身没有 `v1.11.0`；这里切换的是本项目的安装、管理、诊断和安全工具版本。
 
 ## 先分清入口
 
@@ -27,13 +31,13 @@ apt-get install -y git ca-certificates
 ```
 
 ```bash
-git clone --branch v1.10.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.10.0
+git clone --branch v1.11.0 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.11.0
 ```
 
 然后只运行这一条推荐命令，自动选择 GitHub 最新稳定标签：
 
 ```bash
-bash /root/socks5-toolkit-v1.10.0/scripts/socks-upgrade latest
+bash /root/socks5-toolkit-v1.11.0/scripts/socks-upgrade latest
 ```
 
 命令会先自动完成只读检查，通过后直接执行，不再要求输入第二个确认口令。完成后服务器会安装
@@ -59,7 +63,7 @@ socksctl upgrade latest
 socksctl upgrade v目标版本号
 ```
 
-必须填写完整稳定标签，例如 `v1.10.0`，不能填写 `main` 或省略版本号。
+必须填写完整稳定标签，例如 `v1.11.0`，不能填写 `main` 或省略版本号。
 
 ## 可选：恢复到较旧版本
 
@@ -112,3 +116,7 @@ socksctl check
 校验 SHA-256。切换会重启一次 GOST，现有连接可能短暂中断，但比特浏览器代理资料不需要修改。
 
 下一步只有一个：回到[客户端导入与网络验收](clients.md)确认实际出口。
+
+<!-- docs-nav-bottom:start -->
+[← 返回上一级：教程导航](navigation.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav-bottom:end -->

@@ -1,0 +1,15 @@
+id	path	category	title	summary	keywords	parent	next
+home	README.md	导航	项目首页	项目定位、开始搭建、日常使用和故障入口。	首页 初始界面 总入口 README	none	tutorial
+navigation	docs/navigation.md	导航	教程导航	全部新手教程的文字后备导航和分类入口。	导航 地图 返回 上一级 搜索	home	tutorial
+tutorial	docs/tutorial.md	开始搭建	第一次搭建总路线	从准备 VPS 到安装、客户端验收和日常管理的唯一主线。	搭建 安装 新手 VPS Ubuntu 从零开始	home	none
+macos	docs/macos.md	开始搭建	macOS 部署指南	使用 Mac 终端通过 SSH 部署 SOCKS5。	Mac macOS 苹果 终端 Terminal SSH 部署	tutorial	clients
+windows	docs/windows-xshell.md	开始搭建	Windows + Xshell 部署	使用 Windows 和 Xshell 登录、安装并验收服务器。	Windows Xshell Xftp 登录 粘贴 安装	tutorial	clients
+clients	docs/clients.md	客户端	客户端导入与网络验收	导出连接信息、生成二维码并配置常用客户端。	客户端 二维码 QR v2rayN Shadowrocket 小火箭 比特浏览器 导入	tutorial	none
+upgrade	docs/upgrade.md	日常维护	安全切换稳定版本	切换最新版、指定新版或经过验证的本机旧版快照。	更新 升级 latest 最新版 降级 旧版本 快照 凭据保留	navigation	clients
+change-ip	docs/change-public-ip.md	日常维护	更换 VPS 公网 IP	同一台服务器更换公网 IP 后安全更新节点记录。	更换 IP 公网IP 地址 服务器 节点 更新	navigation	clients
+troubleshooting	docs/troubleshooting.md	故障处理	故障检查与求助	记录现象、只读诊断、生成脱敏报告并安全求助。	故障 失败 断联 连接不上 端口 报告 Codex 维修	navigation	none
+mobile	docs/mobile-network-check.md	客户端	手机网络环境检查	检查 Wi-Fi、手机流量、VPN 和小火箭出口。	手机 WiFi 流量 VPN 小火箭 出口 检测	clients	clients
+bitbrowser	docs/bitbrowser-fail-closed.md	客户端	比特浏览器失败关闭	代理失效时阻止窗口继续裸连的人工设置和验收。	比特浏览器 防裸连 失败关闭 白名单 网络错误	clients	clients
+network-checks	docs/announcements/network-check-links.md	客户端	网络检测网站与方法	检查出口 IPv4、IPv6、WebRTC、DNS、地区和网络类型。	检测网站 IPv4 IPv6 WebRTC DNS IP 地区 风险	clients	clients
+addons	addons/README.md	可选插件	可选插件中心	首次搭建完成后按真实需要选择独立插件。	插件 可选 扩展 加速 BBR FQ	navigation	bbr
+bbr	addons/bbr/README.md	可选插件	BBR + FQ 插件	为部分高延迟或丢包 TCP 线路提供可回退的拥塞控制选项。	BBR FQ 加速 延迟 丢包 TCP 卸载 恢复	addons	none

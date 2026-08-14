@@ -1,5 +1,9 @@
 # 比特浏览器代理失效时避免裸连
 
+<!-- docs-nav:start -->
+[← 返回上一级：客户端导入与网络验收](clients.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav:end -->
+
 目标是“失败关闭”：SOCKS5 无法使用时，窗口停止打开网页，而不是退回电脑本地网络或工作
 VPN。服务器只能保证 GOST 状态，无法单独控制客户端是否直连，因此必须在比特浏览器中设置
 并做破坏性验收。
@@ -63,3 +67,7 @@ SOCKS5 中途断线后都能构成操作系统级 kill switch。因此：
 ```
 
 下一步只有一个：[客户端导入与网络验收](clients.md)。
+
+<!-- docs-nav-bottom:start -->
+[← 返回上一级：客户端导入与网络验收](clients.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav-bottom:end -->

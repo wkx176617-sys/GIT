@@ -18,7 +18,10 @@ release_file="docs/releases/$tag.md"
    && -f docs/modules.md && -f docs/macos.md && -f docs/windows-xshell.md \
    && -f docs/clients.md && -f docs/visual-style.md && -f docs/upgrade.md \
    && -f docs/change-public-ip.md && -f docs/mobile-network-check.md \
-   && -f docs/bitbrowser-fail-closed.md ]] \
+   && -f docs/bitbrowser-fail-closed.md && -f docs/navigation.md \
+   && -f docs/navigator/index.html && -f docs/navigator/style.css \
+   && -f docs/navigator/app.js && -f docs/navigator/navigation.tsv \
+   && -x scripts/docs-navigation && -f .github/workflows/docs-navigation.yml ]] \
   || { printf '缺少仓库规则、架构、模块索引、平台教程或客户端教程\n' >&2; exit 1; }
 [[ -f .github/ISSUE_TEMPLATE/bug_report.yml \
    && -f .github/ISSUE_TEMPLATE/feature_request.yml \
@@ -34,6 +37,9 @@ grep -Fq '[客户端导入与网络验收](docs/clients.md)' README.md \
   || { printf 'README 未提供客户端专用入口\n' >&2; exit 1; }
 grep -Fq '[安全切换稳定版本](docs/upgrade.md)' README.md \
   || { printf 'README 未提供独立安全版本切换入口\n' >&2; exit 1; }
+grep -Fq '[快速搜索](https://wkx176617-sys.github.io/GIT/)' README.md \
+  && grep -Fq '[全部教程导航](docs/navigation.md)' README.md \
+  || { printf 'README 缺少快速搜索或文字后备导航\n' >&2; exit 1; }
 grep -Fq 'socksctl upgrade latest' docs/upgrade.md \
   && grep -Fq 'socksctl upgrade v目标版本号' docs/upgrade.md \
   && grep -Fq '不再要求输入第二个确认口令' docs/upgrade.md \
@@ -63,6 +69,9 @@ grep -Fq 'Wi-Fi' docs/mobile-network-check.md && grep -Fq '手机流量' docs/mo
   || { printf '手机教程缺少Wi-Fi或流量切换检查\n' >&2; exit 1; }
 grep -Fq '## 复杂度与性能影响' "$release_file" \
   || { printf '版本说明缺少“复杂度与性能影响”\n' >&2; exit 1; }
+grep -Fq '辅助导航不计为推荐下一步' docs/project-principles.md \
+  && grep -Fq '统一导航清单维护' docs/project-principles.md \
+  || { printf '项目宗旨缺少辅助导航与单一来源边界\n' >&2; exit 1; }
 grep -Fq 'GOST 是唯一必要的常驻业务进程' docs/project-principles.md \
   || { printf '项目宗旨缺少常驻进程边界\n' >&2; exit 1; }
 grep -Fq '新功能默认先评估能否作为插件' docs/project-principles.md \
@@ -135,8 +144,37 @@ done < <(git tag --list 'v*' --sort=version:refname)
 bash tests/syntax.sh
 bash tests/upgrade-flow.sh
 
+scripts/docs-navigation --check
+[[ $(grep -Rhc '^<!-- docs-nav:start -->$' \
+  docs/tutorial.md docs/macos.md docs/windows-xshell.md docs/clients.md docs/upgrade.md \
+  docs/change-public-ip.md docs/troubleshooting.md docs/mobile-network-check.md \
+  docs/bitbrowser-fail-closed.md docs/announcements/network-check-links.md \
+  addons/README.md addons/bbr/README.md | awk '{sum += $1} END {print sum}') -eq 12 ]] \
+  || { printf '新手专题顶部导航数量不正确\n' >&2; exit 1; }
+[[ $(grep -Rhc '^<!-- docs-nav-bottom:start -->$' \
+  docs/tutorial.md docs/macos.md docs/windows-xshell.md docs/clients.md docs/upgrade.md \
+  docs/change-public-ip.md docs/troubleshooting.md docs/mobile-network-check.md \
+  docs/bitbrowser-fail-closed.md docs/announcements/network-check-links.md \
+  addons/README.md addons/bbr/README.md | awk '{sum += $1} END {print sum}') -eq 12 ]] \
+  || { printf '新手专题底部导航数量不正确\n' >&2; exit 1; }
+grep -Fq '不改变' docs/navigation.md && grep -Fq '第一次搭建总路线' docs/navigation.md \
+  || { printf '文字导航缺少单一主线说明\n' >&2; exit 1; }
+grep -Fq '无后台服务' docs/navigator/index.html \
+  && grep -Fq '文字后备入口' docs/navigator/index.html \
+  && grep -Fq "v$version 文档导航" docs/navigator/index.html \
+  && grep -Fq 'actions/configure-pages@v5' .github/workflows/docs-navigation.yml \
+  && grep -Fq 'actions/upload-pages-artifact@v3' .github/workflows/docs-navigation.yml \
+  && grep -Fq 'actions/deploy-pages@v4' .github/workflows/docs-navigation.yml \
+  || { printf '静态导航页缺少轻量声明、后备入口或 Pages 发布步骤\n' >&2; exit 1; }
+if rg -n '<(script|link)[^>]+(src|href)="https?://' docs/navigator; then
+  printf '静态导航页不得加载外部脚本、样式或字体\n' >&2
+  exit 1
+fi
+
 grep -Fq 'shellcheck --severity=error' .github/workflows/validate.yml \
   || { printf 'GitHub Actions 缺少强制 ShellCheck\n' >&2; exit 1; }
+grep -Fq 'node --check docs/navigator/app.js' .github/workflows/validate.yml \
+  || { printf 'GitHub Actions 缺少静态搜索脚本语法检查\n' >&2; exit 1; }
 grep -Fq 'gh release create' .github/workflows/validate.yml \
   && grep -Fq 'needs: validate' .github/workflows/validate.yml \
   || { printf '标签工作流缺少校验后的 GitHub Release 创建步骤\n' >&2; exit 1; }
@@ -192,7 +230,7 @@ done < <(git ls-files --cached --others --exclude-standard '*.md' | sort -u)
 format_failed=false
 while IFS= read -r text_file; do
   case "$text_file" in
-    *.md|*.sh|*.yml|*.yaml|VERSION|.gitignore) ;;
+    *.md|*.sh|*.yml|*.yaml|*.html|*.css|*.js|*.tsv|VERSION|.gitignore|scripts/docs-navigation) ;;
     *) continue ;;
   esac
   [[ -f $text_file ]] || continue

@@ -15,7 +15,12 @@ jobs:
         with:
           fetch-depth: 0
       - name: ShellCheck
-        run: git ls-files '*.sh' 'scripts/*' 'addons/bbr/bbrctl' | xargs shellcheck --severity=error
+        run: |
+          git ls-files '*.sh' 'scripts/*' 'addons/bbr/bbrctl' | while IFS= read -r file; do
+            head -n 1 "$file" | grep -Fqx '#!/usr/bin/env bash' && printf '%s\n' "$file" || true
+          done | xargs shellcheck --severity=error
+      - name: Validate static search script
+        run: node --check docs/navigator/app.js
       - name: Validate scripts and version documentation
         run: bash scripts/release-check.sh
 

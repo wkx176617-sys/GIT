@@ -1,5 +1,9 @@
 # 客户端导入与网络验收
 
+<!-- docs-nav:start -->
+[← 返回上一级：第一次搭建总路线](tutorial.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav:end -->
+
 本页集中说明如何查询同一个 SOCKS5 节点、复制导入链接、显示二维码，以及在比特浏览器中
 人工验收。操作系统教程不再分别维护不同版本的导入格式。
 
@@ -121,3 +125,7 @@ socksctl check
 - 怀疑泄露时运行 `socksctl rotate`，并立即更新所有客户端。
 
 验收失败时不要切换其他搭建分支，下一步只进入[故障处理教程](troubleshooting.md)。
+
+<!-- docs-nav-bottom:start -->
+[← 返回上一级：第一次搭建总路线](tutorial.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav-bottom:end -->

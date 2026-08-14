@@ -26,6 +26,9 @@ for file in "${files[@]}"; do
   bash -n "$file"
 done
 
+command -v python3 >/dev/null 2>&1 || { printf '缺少文档导航检查所需的 Python 3。\n' >&2; exit 1; }
+"$project_dir/scripts/docs-navigation" --check >/dev/null
+
 "$project_dir/deploy.sh" --help >/dev/null
 "$project_dir/xshell-install.sh" --help >/dev/null
 "$project_dir/install.sh" --help >/dev/null
@@ -54,7 +57,7 @@ grep -q -- '-O exit' "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.10.0"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.11.0"' "$project_dir/install.sh"
 grep -q 'for dependency_command in base64 .*qrencode' "$project_dir/install.sh"
 grep -q 'apt-get install -y .*qrencode' "$project_dir/install.sh"
 grep -q 'for required_command in base64 .*qrencode' "$project_dir/install.sh"
@@ -135,6 +138,11 @@ grep -q 'RestartSec=5s' "$project_dir/install.sh"
 grep -q 'RECOVERY_LOOP' "$project_dir/scripts/socksctl"
 grep -q 'SOCKS5 中文新手菜单' "$project_dir/scripts/socksctl"
 grep -q 'allow-downgrade' "$project_dir/install.sh"
+grep -q 'docs-nav:start' "$project_dir/docs/tutorial.md"
+grep -q '返回上一级' "$project_dir/docs/tutorial.md"
+grep -q '快速搜索' "$project_dir/docs/tutorial.md"
+grep -q 'fetch(MANIFEST_URL' "$project_dir/docs/navigator/app.js"
+grep -q '不连接 VPS' "$project_dir/docs/navigator/index.html"
 if grep -q 'apt-get' "$project_dir/xshell-install.sh"; then
   printf 'Xshell入口不应在安装器之前重复运行 apt 更新或依赖安装。\n' >&2
   exit 1

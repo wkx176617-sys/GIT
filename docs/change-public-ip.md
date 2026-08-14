@@ -1,5 +1,9 @@
 # 同一台 VPS 更换公网 IP
 
+<!-- docs-nav:start -->
+[← 返回上一级：教程导航](navigation.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav:end -->
+
 本页只适用于：VPS 系统、磁盘和服务都不变，供应商只把旧公网 IPv4 更换为新公网 IPv4。
 如果是更换整台服务器或重装系统，应重新走[第一次搭建总路线](tutorial.md)。
 
@@ -64,3 +68,7 @@ socksctl check
 业务账号。
 
 下一步只有一个：[客户端导入与网络验收](clients.md)。
+
+<!-- docs-nav-bottom:start -->
+[← 返回上一级：教程导航](navigation.md)　·　[⌂ 项目首页](../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav-bottom:end -->

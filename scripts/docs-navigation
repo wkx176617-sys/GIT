@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""Generate and validate the lightweight tutorial navigation."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+from html.parser import HTMLParser
+import os
+from pathlib import Path
+import sys
+from typing import Optional
+
+
+ROOT = Path(__file__).resolve().parent.parent
+MANIFEST = ROOT / "docs/navigator/navigation.tsv"
+NAVIGATION_PAGE = ROOT / "docs/navigation.md"
+SEARCH_URL = "https://wkx176617-sys.github.io/GIT/"
+START = "<!-- docs-nav:start -->"
+END = "<!-- docs-nav:end -->"
+BOTTOM_START = "<!-- docs-nav-bottom:start -->"
+BOTTOM_END = "<!-- docs-nav-bottom:end -->"
+GENERATED_NOTICE = "<!-- 本页由 scripts/docs-navigation 根据 docs/navigator/navigation.tsv 生成，请勿手工维护。 -->"
+SITE_ROOT = ROOT / "docs/navigator"
+
+
+class SiteParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ids: set[str] = set()
+        self.local_assets: set[str] = set()
+        self.external_assets: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, Optional[str]]]) -> None:
+        attributes = dict(attrs)
+        element_id = attributes.get("id")
+        if element_id:
+            if element_id in self.ids:
+                fail(f"静态搜索页 HTML ID 重复：{element_id}")
+            self.ids.add(element_id)
+        source = attributes.get("src") if tag == "script" else attributes.get("href") if tag == "link" else None
+        if not source:
+            return
+        if source.startswith(("http://", "https://")):
+            self.external_assets.append(source)
+        else:
+            self.local_assets.add(source)
+
+
+def fail(message: str) -> None:
+    raise ValueError(message)
+
+
+def load_entries() -> tuple[list[dict[str, str]], dict[str, dict[str, str]]]:
+    with MANIFEST.open(encoding="utf-8", newline="") as handle:
+        entries = list(csv.DictReader(handle, delimiter="\t"))
+    required = {"id", "path", "category", "title", "summary", "keywords", "parent", "next"}
+    if not entries or set(entries[0]) != required:
+        fail("导航清单表头不正确")
+    by_id: dict[str, dict[str, str]] = {}
+    paths: set[str] = set()
+    for entry in entries:
+        if any(not entry[field].strip() for field in required):
+            fail(f"导航条目存在空字段：{entry.get('id', 'unknown')}")
+        entry_id = entry["id"]
+        if entry_id in by_id:
+            fail(f"导航 ID 重复：{entry_id}")
+        if entry["path"] in paths:
+            fail(f"导航路径重复：{entry['path']}")
+        if not (ROOT / entry["path"]).exists() and entry_id != "navigation":
+            fail(f"导航目标不存在：{entry['path']}")
+        by_id[entry_id] = entry
+        paths.add(entry["path"])
+    if "home" not in by_id or "tutorial" not in by_id or "navigation" not in by_id:
+        fail("导航清单缺少 home、tutorial 或 navigation")
+    for entry in entries:
+        for relation in ("parent", "next"):
+            target = entry[relation]
+            if target != "none" and target not in by_id:
+                fail(f"{entry['id']} 的 {relation} 指向未知 ID：{target}")
+            if target == entry["id"]:
+                fail(f"{entry['id']} 的 {relation} 不能指向自身")
+    for relation in ("parent", "next"):
+        for entry in entries:
+            seen: set[str] = set()
+            current = entry
+            while current[relation] != "none":
+                if current["id"] in seen:
+                    fail(f"{relation} 关系形成循环：{entry['id']}")
+                seen.add(current["id"])
+                current = by_id[current[relation]]
+            if relation == "parent" and entry["id"] != "home" and current["id"] != "home":
+                fail(f"{entry['id']} 的父级链没有回到 home")
+    return entries, by_id
+
+
+def validate_static_site() -> None:
+    html_file = SITE_ROOT / "index.html"
+    script_file = SITE_ROOT / "app.js"
+    style_file = SITE_ROOT / "style.css"
+    for path in (html_file, script_file, style_file, MANIFEST):
+        if not path.is_file():
+            fail(f"静态搜索资源不存在：{path.relative_to(ROOT)}")
+    parser = SiteParser()
+    parser.feed(html_file.read_text(encoding="utf-8"))
+    required_ids = {"search", "clear", "categories", "results", "empty", "status", "results-title"}
+    missing_ids = required_ids - parser.ids
+    if missing_ids:
+        fail("静态搜索页缺少 HTML ID：" + "、".join(sorted(missing_ids)))
+    if parser.external_assets:
+        fail("静态搜索页加载了外部脚本或样式")
+    if parser.local_assets != {"style.css", "app.js"}:
+        fail("静态搜索页本地资源引用不完整")
+    site_bytes = sum(path.stat().st_size for path in SITE_ROOT.iterdir() if path.is_file())
+    if site_bytes > 100_000:
+        fail(f"静态搜索资源超过 100KB 预算：{site_bytes} bytes")
+
+
+def relative_link(source: str, target: str) -> str:
+    source_dir = os.path.dirname(source) or "."
+    return os.path.relpath(target, source_dir).replace(os.sep, "/")
+
+
+def navigation_block(entry: dict[str, str], by_id: dict[str, dict[str, str]], bottom: bool = False) -> str:
+    parent = by_id[entry["parent"]]
+    parent_link = relative_link(entry["path"], parent["path"])
+    home_link = relative_link(entry["path"], by_id["home"]["path"])
+    opening, closing = (BOTTOM_START, BOTTOM_END) if bottom else (START, END)
+    if parent["id"] == "home":
+        links = (
+            f"[← 返回上一级：{parent['title']}]({parent_link})　·　"
+            f"[🔎 快速搜索]({SEARCH_URL})"
+        )
+    else:
+        links = (
+            f"[← 返回上一级：{parent['title']}]({parent_link})　·　"
+            f"[⌂ 项目首页]({home_link})　·　[🔎 快速搜索]({SEARCH_URL})"
+        )
+    return (
+        f"{opening}\n"
+        f"{links}\n"
+        f"{closing}"
+    )
+
+
+def replace_or_insert(text: str, block: str, start: str, end: str, at_bottom: bool = False) -> str:
+    if start in text or end in text:
+        if text.count(start) != 1 or text.count(end) != 1 or text.index(start) > text.index(end):
+            fail(f"导航标记损坏：{start}")
+        before, remainder = text.split(start, 1)
+        _, after = remainder.split(end, 1)
+        suffix = after.lstrip()
+        if suffix:
+            return before.rstrip() + "\n\n" + block + "\n\n" + suffix
+        return before.rstrip() + "\n\n" + block + "\n"
+    if at_bottom:
+        return text.rstrip() + "\n\n" + block + "\n"
+    lines = text.splitlines()
+    heading_index = next((index for index, line in enumerate(lines) if line.startswith("# ")), None)
+    if heading_index is None:
+        fail("教程缺少一级标题")
+    lines[heading_index + 1:heading_index + 1] = ["", block, ""]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_document(entry: dict[str, str], by_id: dict[str, dict[str, str]]) -> str:
+    path = ROOT / entry["path"]
+    text = path.read_text(encoding="utf-8")
+    text = replace_or_insert(text, navigation_block(entry, by_id), START, END)
+    return replace_or_insert(
+        text,
+        navigation_block(entry, by_id, bottom=True),
+        BOTTOM_START,
+        BOTTOM_END,
+        at_bottom=True,
+    )
+
+
+def render_navigation_page(entries: list[dict[str, str]], by_id: dict[str, dict[str, str]]) -> str:
+    entry = by_id["navigation"]
+    categories: list[str] = []
+    for item in entries:
+        if item["id"] not in {"home", "navigation"} and item["category"] not in categories:
+            categories.append(item["category"])
+    lines = [
+        "# 教程导航",
+        "",
+        GENERATED_NOTICE,
+        "",
+        navigation_block(entry, by_id),
+        "",
+        "不知道应该进入哪一页时，先使用[快速搜索]"
+        f"({SEARCH_URL})；搜索页不可用时，可继续使用下面的文字导航。",
+        "",
+        "> 本页只提供辅助定位，不改变[第一次搭建总路线](tutorial.md)的唯一推荐流程。",
+    ]
+    for category in categories:
+        lines.extend(["", f"## {category}", "", "| 页面 | 解决什么 |", "|---|---|"])
+        for item in entries:
+            if item["category"] != category or item["id"] in {"home", "navigation"}:
+                continue
+            link = relative_link(entry["path"], item["path"])
+            lines.append(f"| [{item['title']}]({link}) | {item['summary']} |")
+    lines.extend(["", "推荐下一步只有一个：[第一次搭建总路线](tutorial.md)。", "", navigation_block(entry, by_id, bottom=True), ""])
+    return "\n".join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="生成或检查新手教程导航")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--write", action="store_true", help="写入生成的导航")
+    mode.add_argument("--check", action="store_true", help="只检查导航是否同步")
+    args = parser.parse_args()
+    try:
+        entries, by_id = load_entries()
+        validate_static_site()
+        expected: dict[Path, str] = {NAVIGATION_PAGE: render_navigation_page(entries, by_id)}
+        for entry in entries:
+            if entry["id"] in {"home", "navigation"}:
+                continue
+            expected[ROOT / entry["path"]] = render_document(entry, by_id)
+        drift: list[str] = []
+        for path, content in expected.items():
+            current = path.read_text(encoding="utf-8") if path.exists() else ""
+            if current == content:
+                continue
+            if args.write:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            else:
+                drift.append(str(path.relative_to(ROOT)))
+        if drift:
+            fail("导航未同步，请运行 scripts/docs-navigation --write：" + "、".join(drift))
+    except (OSError, ValueError) as error:
+        print(f"导航检查失败：{error}", file=sys.stderr)
+        return 1
+    print("教程导航生成完成。" if args.write else "教程导航与单一清单一致。")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

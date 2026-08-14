@@ -1,5 +1,9 @@
 # 可选 BBR + FQ 加速插件
 
+<!-- docs-nav:start -->
+[← 返回上一级：可选插件中心](../README.md)　·　[⌂ 项目首页](../../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav:end -->
+
 插件版本：`1.1.1`
 
 主程序兼容范围：`v1.4.0` 至所有 `v1.x` 版本；不承诺兼容未来 `v2.x`。
@@ -85,3 +89,7 @@ bbrctl repair
 主项目每次发布新 `v1.x` 时，发布检查会同时检查本目录的脚本语法、插件版本和兼容声明。
 插件若发生变化，必须在主项目 `CHANGELOG.md` 和该次版本说明中记录；真实服务器是否启用
 插件仍由用户单独决定，不会随主程序升级自动开启。
+
+<!-- docs-nav-bottom:start -->
+[← 返回上一级：可选插件中心](../README.md)　·　[⌂ 项目首页](../../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav-bottom:end -->

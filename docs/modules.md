@@ -17,6 +17,7 @@
 | 安全状态 | `scripts/socks-safety` | 核心安全 | 否 | 文件系统、systemd | 权限、完整工具回退、篡改、熔断 |
 | 公网IP更新 | `scripts/socks-refresh-ip` | 生命周期模块 | 否 | safety、doctor、curl | 多目标一致、确认、回退 |
 | 卸载 | `uninstall.sh` | 核心生命周期 | 否 | systemd | 确认和清理范围 |
+| 教程导航生成 | `scripts/docs-navigation` | 文档工具 | 否 | Python 3标准库 | 单一清单、断链、生成漂移 |
 
 正常运行时，上述脚本都不会驻留；只有 GOST 由 systemd 管理并持续提供 SOCKS5 服务。
 
@@ -35,6 +36,8 @@
 |---|---|
 | `AGENTS.md` | 整个仓库必须遵守的开发规则和决策顺序 |
 | `README.md` | GitHub首页，只保留定位、快速入口、模块地图和导航 |
+| `docs/navigation.md` | 搜索失效时仍可使用的自动生成文字导航 |
+| `docs/navigator/` | GitHub Pages纯静态搜索页、样式、脚本和唯一导航清单 |
 | `addons/README.md` | 所有稳定可选插件的统一登记和用户入口 |
 | `docs/tutorial.md` | 第一次搭建的单一总路线和专题入口，不复制专题细节 |
 | `docs/macos.md` | Mac Terminal、SSH、部署、迁移和升级步骤 |
@@ -61,6 +64,7 @@
 - 服务、端口、资源或线路检测：改 `socks-doctor`，不要写入安装器。
 - 快照、事件、校验、熔断：改 `socks-safety`，不要让 `socksctl` 自己保存状态。
 - 用户命令和菜单：改 `socksctl`，复杂实现应下沉到对应模块。
+- 教程返回、首页、搜索词或分类：只改 `docs/navigator/navigation.tsv`，再运行导航生成器。
 - 可选加速或未来非必要能力：进入 `addons/`，不得并入默认安装。
 - 只需解释的偶发问题：优先更新教程，不增加代码。
 

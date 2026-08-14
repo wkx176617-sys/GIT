@@ -1,5 +1,9 @@
 # 公告：常用网络检测网站与使用方法
 
+<!-- docs-nav:start -->
+[← 返回上一级：客户端导入与网络验收](../clients.md)　·　[⌂ 项目首页](../../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav:end -->
+
 更新日期：2026-08-13
 
 这份公告用于检查两类网络：
@@ -174,3 +178,7 @@ DNS 服务器所在城市不一定与代理城市完全相同。公共 DNS、云
 - SOCKS5 密码不要输入到任何检测网站。
 - 检测网站只需在浏览器中打开，不需要安装扩展或下载程序。
 - 不要在公开群聊中长期分享真实节点 IP 和安全组来源 IP。
+
+<!-- docs-nav-bottom:start -->
+[← 返回上一级：客户端导入与网络验收](../clients.md)　·　[⌂ 项目首页](../../README.md)　·　[🔎 快速搜索](https://wkx176617-sys.github.io/GIT/)
+<!-- docs-nav-bottom:end -->
