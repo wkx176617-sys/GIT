@@ -24,7 +24,7 @@ usage() {
   export [类型]     导出客户端连接信息：all、v2rayn、shadowrocket
   qr [类型]         在终端生成二维码：v2rayn、shadowrocket
   refresh-ip        VPS更换公网IP后安全更新节点记录和导入信息
-  upgrade [参数]    已有本项目节点的安全升级入口
+  upgrade vX.Y.Z    一条命令安全升级；内部先只读检查再确认
   logs [行数]       查看日志，默认 100 行
   restart           重启服务
   rotate            自动生成新密码并重启

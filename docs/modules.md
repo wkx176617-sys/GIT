@@ -9,7 +9,7 @@
 | Mac部署 | `deploy.sh` | 核心入口 | 否 | SSH、SCP | 参数和帮助测试 |
 | Xshell部署 | `xshell-install.sh` | 核心入口 | 否 | Ubuntu基础命令 | 错误参数拦截 |
 | 安装升级 | `install.sh` | 核心 | 否 | systemd、curl、基础工具 | 版本、锁、有限启动验收 |
-| 指定版本升级 | `scripts/socks-upgrade` | 生命周期模块 | 否 | git、timeout、install | 身份、超时、确认、完整流程验收 |
+| 指定版本升级 | `scripts/socks-upgrade` | 生命周期模块 | 否 | git、timeout、install | 单命令、身份、超时、确认、完整流程验收 |
 | 旧节点质检 | `preflight.sh` | 核心只读 | 否 | systemd、ss | 镜像和端口分类 |
 | 受控迁移 | `overwrite.sh` | 兼容模块 | 否 | install、旧sing-box | 备份和回退标记 |
 | 日常入口 | `scripts/socksctl` | 核心接口 | 否 | doctor、safety | 导出、白名单、菜单 |

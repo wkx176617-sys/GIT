@@ -45,13 +45,13 @@ exit 0
 EOF
 chmod +x "$fake_bin/flock"
 
-printf '1.9.2\n' >"$repository_dir/VERSION"
+printf '1.9.3\n' >"$repository_dir/VERSION"
 printf '# fixture module\n' >"$repository_dir/scripts/socks-upgrade"
 cat >"$repository_dir/install.sh" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-[[ ${1:-} != --version ]] || { printf '1.9.2\n'; exit 0; }
+[[ ${1:-} != --version ]] || { printf '1.9.3\n'; exit 0; }
 config_dir=${SOCKS_CONFIG_DIR:?}
 env_file="$config_dir/node.env"
 port=""
@@ -66,8 +66,8 @@ done
 [[ $preserve_node == true ]] || { printf 'fixture installer requires preserve mode\n' >&2; exit 1; }
 existing_port=$(awk -F= '$1 == "SOCKS_PORT" {print $2}' "$env_file")
 [[ $port == "$existing_port" ]] || { printf 'fixture port changed\n' >&2; exit 1; }
-awk -F= '$1 == "TOOL_VERSION" {print "TOOL_VERSION=1.9.2"; found=1; next} \
-  {print} END {if (!found) print "TOOL_VERSION=1.9.2"}' \
+awk -F= '$1 == "TOOL_VERSION" {print "TOOL_VERSION=1.9.3"; found=1; next} \
+  {print} END {if (!found) print "TOOL_VERSION=1.9.3"}' \
   "$env_file" >"$env_file.next"
 mv "$env_file.next" "$env_file"
 EOF
@@ -76,8 +76,8 @@ chmod +x "$repository_dir/install.sh"
 git -C "$repository_dir" init -q
 git -C "$repository_dir" add VERSION install.sh scripts/socks-upgrade
 git -C "$repository_dir" -c user.name='Release Test' -c user.email='release-test@example.invalid' \
-  commit -q -m 'fixture v1.9.2'
-git -C "$repository_dir" tag v1.9.2
+  commit -q -m 'fixture v1.9.3'
+git -C "$repository_dir" tag v1.9.3
 
 upgrade_environment=(
   "PATH=$fake_bin:$PATH"
@@ -89,12 +89,13 @@ upgrade_environment=(
 )
 
 before_identity=$(awk -F= '$1 != "TOOL_VERSION" {print}' "$config_dir/node.env")
-upgrade_output=$(printf 'UPGRADE-v1.9.2\n' | env "${upgrade_environment[@]}" \
-  "$project_dir/scripts/socks-upgrade" v1.9.2 2>&1)
+upgrade_output=$(printf 'UPGRADE-v1.9.3\n' | env "${upgrade_environment[@]}" \
+  "$project_dir/scripts/socks-upgrade" v1.9.3 2>&1)
 after_identity=$(awk -F= '$1 != "TOOL_VERSION" {print}' "$config_dir/node.env")
 
-grep -Fq '安全升级完成：早期版本 → v1.9.2' <<<"$upgrade_output"
-grep -Fq 'TOOL_VERSION=1.9.2' "$config_dir/node.env"
+grep -Fq '升级只读检查通过' <<<"$upgrade_output"
+grep -Fq '安全升级完成：早期版本 → v1.9.3' <<<"$upgrade_output"
+grep -Fq 'TOOL_VERSION=1.9.3' "$config_dir/node.env"
 [[ $before_identity == "$after_identity" ]] || {
   printf '完整升级流程改变了节点身份、IP、端口或凭据。\n' >&2
   exit 1
@@ -108,7 +109,7 @@ grep -v '^TOOL_VERSION=' "$config_dir/node.env" >"$config_dir/node.env.next"
 mv "$config_dir/node.env.next" "$config_dir/node.env"
 timeout_output=""
 if timeout_output=$(env "${upgrade_environment[@]}" SOCKS_TIMEOUT_BIN="$timeout_failure" \
-  "$project_dir/scripts/socks-upgrade" --check v1.9.2 2>&1); then
+  "$project_dir/scripts/socks-upgrade" --check v1.9.3 2>&1); then
   printf '标签查询超时后升级器本应停止。\n' >&2
   exit 1
 fi

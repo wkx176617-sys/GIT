@@ -34,9 +34,18 @@ grep -Fq '[客户端导入与网络验收](docs/clients.md)' README.md \
   || { printf 'README 未提供客户端专用入口\n' >&2; exit 1; }
 grep -Fq '[安全升级到指定版本](docs/upgrade.md)' README.md \
   || { printf 'README 未提供独立安全升级入口\n' >&2; exit 1; }
-grep -Fq 'socksctl upgrade --check' docs/upgrade.md \
+grep -Fq 'socksctl upgrade v目标版本号' docs/upgrade.md \
+  && grep -Fq '自动先执行只读检查' docs/upgrade.md \
+  && grep -Fq 'socksctl upgrade --check v目标版本号' docs/upgrade.md \
+  && grep -Fq '`--check` 严格只读' docs/upgrade.md \
   && grep -Fq '智能安装 / 升级路线' docs/upgrade.md \
-  || { printf '升级专题缺少只读检查或现状未知分流\n' >&2; exit 1; }
+  || { printf '升级专题缺少单命令主路径、内置预检、可选只读检查或现状未知分流\n' >&2; exit 1; }
+[[ $(grep -Fc 'socksctl upgrade v目标版本号' docs/upgrade.md) -eq 1 ]] \
+  || { printf '升级专题必须只有一条已安装节点的推荐正式命令\n' >&2; exit 1; }
+if grep -Fq 'scripts/socks-upgrade --check' docs/upgrade.md; then
+  printf '早期节点推荐路径不应要求单独执行只读检查\n' >&2
+  exit 1
+fi
 grep -Fq 'socksctl export' docs/clients.md && grep -Fq 'socksctl qr shadowrocket' docs/clients.md \
   || { printf '客户端教程缺少链接或二维码说明\n' >&2; exit 1; }
 grep -Fq 'socksctl refresh-ip --check' docs/change-public-ip.md \

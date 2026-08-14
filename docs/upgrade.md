@@ -1,7 +1,7 @@
 # 安全升级到指定版本
 
 本页只负责“已经确认服务器运行本项目旧版，想保留节点信息并升级工具”的情况。SOCKS5协议
-本身没有 `v1.9.2`；这里升级的是本项目的安装、管理、诊断和安全工具版本。
+本身没有 `v1.9.3`；这里升级的是本项目的安装、管理、诊断和安全工具版本。
 
 ## 先分清入口
 
@@ -27,39 +27,37 @@ apt-get install -y git ca-certificates
 ```
 
 ```bash
-git clone --branch v1.9.2 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.9.2
+git clone --branch v1.9.3 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.9.3
 ```
 
-先只读确认当前确实是本项目节点：
+然后只运行这一条推荐命令：
 
 ```bash
-bash /root/socks5-toolkit-v1.9.2/scripts/socks-upgrade --check v1.9.2
+bash /root/socks5-toolkit-v1.9.3/scripts/socks-upgrade v1.9.3
 ```
 
-检查通过后再正式升级：
-
-```bash
-bash /root/socks5-toolkit-v1.9.2/scripts/socks-upgrade v1.9.2
-```
-
-根据提示输入 `UPGRADE-v1.9.2`。完成后服务器会安装永久命令，并统一通过 `socksctl` 管理。
+命令会先自动完成只读检查，显示当前版本、目标版本和保留端口；检查通过后才会提示输入
+`UPGRADE-v1.9.3`。完成后服务器会安装永久命令，并统一通过 `socksctl` 管理。
 
 ## 以后升级到指定稳定版
 
-先阅读目标[版本说明](releases/)，再运行只读检查：
-
-```bash
-socksctl upgrade --check v目标版本号
-```
-
-确认当前版本、目标版本和端口正确后运行：
+先阅读目标[版本说明](releases/)，然后只运行这一条推荐命令：
 
 ```bash
 socksctl upgrade v目标版本号
 ```
 
-必须填写完整稳定标签，例如 `v1.9.2`。不能填写 `main`、`latest` 或省略版本号。独立命令
+它会自动先执行只读检查，只有节点身份、升级方向和远端稳定标签全部通过，才会请求人工确认。
+必须填写完整稳定标签，例如 `v1.9.3`；不能填写 `main`、`latest` 或省略版本号。独立命令
 `socks-upgrade` 继续保留兼容，但日常推荐入口只有 `socksctl upgrade`。
+
+如果只想提前体检而暂时不升级，可以按需运行：
+
+```bash
+socksctl upgrade --check v目标版本号
+```
+
+`--check` 严格只读，也不会要求随后执行第二条命令；它不是推荐升级流程中的必需步骤。
 
 ## 升级后验收
 
