@@ -46,6 +46,7 @@ printf 'CPU 架构：%s\n' "$arch"
 printf '目标端口：%s/TCP\n' "$port"
 
 problems=0
+install_mode=clean
 [[ $supported == true ]] || { printf '不兼容：当前仅支持 Ubuntu 20.04/22.04/24.04。\n'; problems=$((problems + 1)); }
 [[ $arch_supported == true ]] || { printf '不兼容：当前仅支持 amd64/arm64。\n'; problems=$((problems + 1)); }
 [[ -d /run/systemd/system ]] || { printf '不兼容：镜像没有运行 systemd。\n'; problems=$((problems + 1)); }
@@ -65,11 +66,13 @@ fi
 
 printf '\n代理服务：\n'
 found_service=false
+active_services=()
 for service_name in gost-socks sing-box x-ui xray v2ray; do
   state=$(systemctl is-active "$service_name" 2>/dev/null || true)
   if [[ $state != inactive && $state != unknown && -n $state ]]; then
     printf '  %-12s %s\n' "$service_name" "$state"
     found_service=true
+    active_services+=("$service_name")
   fi
 done
 [[ $found_service == true ]] || printf '  未发现正在运行的常见代理服务\n'
@@ -85,9 +88,10 @@ elif [[ -z $listener ]]; then
   printf '  通过：%s/TCP 未被占用，可以全新安装。\n' "$port"
 elif [[ $listener == *'"gost"'* && -f /etc/gost-socks/node.env ]]; then
   printf '  通过：端口由本工具的 GOST 占用，可以安全升级并保留凭据。\n'
+  install_mode=current
 elif [[ $listener == *'"sing-box"'* && -f /etc/sing-box/config.json ]]; then
-  printf '  可迁移：端口由旧 sing-box 占用。请先查看备份/覆写说明，再运行 overwrite.sh。\n'
-  problems=$((problems + 1))
+  printf '  可迁移：端口由旧 sing-box 占用；智能入口可备份后迁移为 GOST。\n'
+  install_mode=migrate
 else
   printf '  阻止安装：端口被未知或不支持自动迁移的程序占用：\n%s\n' "$listener"
   printf '  不会自动停止 x-ui、Xray、v2ray 或未知程序。\n'
@@ -99,7 +103,37 @@ for path in /etc/gost-socks/node.env /etc/sing-box/config.json /usr/local/x-ui /
   [[ -e $path ]] && printf '  发现 %s\n' "$path"
 done
 
+if [[ $install_mode == migrate && -f /etc/gost-socks/node.env ]]; then
+  printf '  阻止迁移：同时发现本项目节点记录和旧 sing-box 监听，属于混合状态。\n'
+  problems=$((problems + 1))
+fi
+
+allowed_active_service=""
+case "$install_mode" in
+  current) allowed_active_service=gost-socks ;;
+  migrate) allowed_active_service=sing-box ;;
+esac
+
+allowed_active_found=false
+for service_name in "${active_services[@]}"; do
+  if [[ $service_name == "$allowed_active_service" ]]; then
+    allowed_active_found=true
+  else
+    printf '  阻止自动处理：检测到仍在运行的其他代理服务 %s，避免多协议并存或误停服务。\n' "$service_name"
+    problems=$((problems + 1))
+  fi
+done
+
+if [[ -n $allowed_active_service && $allowed_active_found != true ]]; then
+  printf '  阻止自动处理：端口进程与 systemd 服务状态不一致，无法保证停用和回退。\n'
+  problems=$((problems + 1))
+fi
+
 if (( problems == 0 )); then
+  if [[ $install_mode == migrate ]]; then
+    printf '\n质检结论：已确认单一旧 sing-box，可进入一次确认的智能迁移。\n'
+    exit 10
+  fi
   printf '\n质检结论：通过，可以运行标准安装。\n'
   exit 0
 fi

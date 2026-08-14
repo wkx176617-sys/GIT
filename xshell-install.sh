@@ -4,10 +4,10 @@ set -Eeuo pipefail
 usage() {
   cat <<'EOF'
 用法：
-  sudo bash xshell-install.sh [--port 31080] [--overwrite] [--no-bbr]
+  sudo bash xshell-install.sh [--port 31080] [--no-bbr]
 
 此入口适用于 Windows Xshell 登录后的 Ubuntu 服务器。
-默认先质检再安装；使用 --overwrite 时只覆写可安全识别的旧 sing-box SOCKS5。
+默认先质检并智能分流；仅识别到单一旧 sing-box 时自动进入一次确认的安全迁移。
 BBR + FQ 默认开启；只有明确不需要时才添加 --no-bbr。
 EOF
 }
@@ -43,6 +43,12 @@ port=31080
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --overwrite) overwrite=true; shift ;;
+    --name)
+      [[ $# -ge 2 && $2 =~ ^[A-Za-z0-9._-]{2,32}$ ]] \
+        || die "--name 后面必须是 2-32 位安全节点名称"
+      install_args+=(--name "$2")
+      shift 2
+      ;;
     --no-bbr) install_args+=(--no-bbr); shift ;;
     --enable-bbr) install_args+=(--enable-bbr); shift ;;
     --port)
@@ -62,9 +68,18 @@ if [[ $overwrite == true ]]; then
   exec bash "$script_dir/overwrite.sh" "${install_args[@]}"
 fi
 
-if ! bash "$script_dir/preflight.sh" --port "$port"; then
-  printf '\n质检未通过。若报告明确显示“可迁移：旧 sing-box”，请确认备份说明后运行：\n'
-  printf 'bash xshell-install.sh --port %s --overwrite\n' "$port"
-  exit 2
-fi
-exec bash "$script_dir/install.sh" "${install_args[@]}"
+preflight_status=0
+bash "$script_dir/preflight.sh" --port "$port" || preflight_status=$?
+case "$preflight_status" in
+  0)
+    exec bash "$script_dir/install.sh" "${install_args[@]}"
+    ;;
+  10)
+    printf '\n智能分流：已确认可迁移的单一旧 sing-box，继续后会生成新的代理账号和密码。\n'
+    exec bash "$script_dir/overwrite.sh" "${install_args[@]}"
+    ;;
+  *)
+    printf '\n智能安装已停止：当前状态不在安全自动处理白名单内，请按上方中文结论人工检查。\n' >&2
+    exit "$preflight_status"
+    ;;
+esac

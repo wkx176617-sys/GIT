@@ -120,7 +120,13 @@ grep -Fq 'BBR_POLICY=$bbr_policy' install.sh \
   && grep -Fq '目前没有稳定插件' addons/README.md \
   || { printf '核心BBR默认策略、开关、说明或空插件中心不完整\n' >&2; exit 1; }
 if find addons -mindepth 2 -maxdepth 2 -name plugin.conf -type f | grep -q .; then
-  printf 'v1.12.0 插件中心应暂时为空\n' >&2
+  printf '当前版本插件中心应暂时为空\n' >&2
+  exit 1
+fi
+
+if rg -n '(xshell-install\.sh|deploy\.sh).*--overwrite' \
+  docs/tutorial.md docs/macos.md docs/windows-xshell.md README.md; then
+  printf '新手智能安装不应要求复制第二条覆写命令\n' >&2
   exit 1
 fi
 
@@ -133,6 +139,7 @@ done < <(git tag --list 'v*' --sort=version:refname)
 
 bash tests/syntax.sh
 bash tests/bbr-flow.sh
+bash tests/smart-install-flow.sh
 bash tests/upgrade-flow.sh
 
 scripts/docs-navigation --check

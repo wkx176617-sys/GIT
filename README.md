@@ -6,7 +6,7 @@
 
 **给第一次接触服务器的你，一条轻盈、清楚、可以回头的搭建路线。**
 
-[![stable v1.12.0](https://img.shields.io/badge/stable-v1.12.0-E5B8BE?style=flat-square)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.12.0)
+[![stable v1.12.1](https://img.shields.io/badge/stable-v1.12.1-E5B8BE?style=flat-square)](https://github.com/wkx176617-sys/GIT/releases/tag/v1.12.1)
 [![checks](https://img.shields.io/github/actions/workflow/status/wkx176617-sys/GIT/validate.yml?label=checks&style=flat-square&labelColor=F3E8E4&color=A9B8A1)](https://github.com/wkx176617-sys/GIT/actions/workflows/validate.yml)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04_·_22.04_·_24.04-C98F96?style=flat-square)](docs/tutorial.md)
 [![GOST](https://img.shields.io/badge/GOST-3.2.6-A9B8A1?style=flat-square)](https://github.com/go-gost/gost/releases/tag/v3.2.6)
@@ -15,7 +15,7 @@
 
 </div>
 
-> 当前推荐稳定版本：`v1.12.0`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
+> 当前推荐稳定版本：`v1.12.1`。生产节点只使用稳定标签，不直接部署开发中的 `main`。
 
 每台 Ubuntu VPS 运行一个轻量 GOST SOCKS5 节点，默认使用 `31080/TCP`。Mac 或 Windows
 只负责连接服务器和使用浏览器，不需要运行本项目后台服务。
@@ -33,10 +33,12 @@
 
 | 我的情况 | 唯一入口 | 程序会做什么 |
 |---|---|---|
-| 不知道是否搭建过 | [智能安装 / 升级路线](docs/tutorial.md) | 先质检；全新安装或安全兼容升级，未知情况停止 |
+| 不知道是否搭建过 | [智能安装 / 升级路线](docs/tutorial.md) | 自动分流；单一 sing-box 安全迁移，混合或未知状态停止 |
 | 已确认是本项目节点 | [安全切换稳定版本](docs/upgrade.md) | 可到最新版、指定新版或健康快照旧版；保留节点信息 |
 
 智能路线会再让你选择 [macOS 部署指南](docs/macos.md) 或 [Windows + Xshell](docs/windows-xshell.md)。
+已有本项目节点升级时保留代理凭据；迁移其他旧协议时停用旧服务并生成全新凭据，避免两套协议或
+旧密码继续生效。
 
 不知道内容在哪时使用[快速搜索](https://wkx176617-sys.github.io/GIT/)；搜索页不可用时进入
 [全部教程导航](docs/navigation.md)。这两个入口只帮助定位，不改变上面的推荐主线。

@@ -11,8 +11,8 @@
 | 安装升级 | `install.sh` | 核心 | 否 | systemd、curl、Ubuntu基础包 | 版本、依赖、核心复用、锁、有限启动验收 |
 | 网络加速 | `scripts/bbrctl` | 核心网络能力 | 否 | procps、kmod、util-linux | 支持、冲突、幂等、恢复、显式开关 |
 | 稳定版本切换 | `scripts/socks-upgrade` | 生命周期模块 | 否 | git、timeout、install、safety | latest、单次授权、快照降版、下载次数 |
-| 旧节点质检 | `preflight.sh` | 核心只读 | 否 | systemd、ss | 镜像和端口分类 |
-| 受控迁移 | `overwrite.sh` | 兼容模块 | 否 | install、旧sing-box | 备份和回退标记 |
+| 旧节点质检 | `preflight.sh` | 核心只读 | 否 | systemd、ss | 空白、本项目、单一sing-box、混合状态分类 |
+| 受控迁移 | `overwrite.sh` | 兼容模块 | 否 | install、旧sing-box | 备份、停用、凭据轮换、独占监听和回退 |
 | 日常入口 | `scripts/socksctl` | 核心接口 | 否 | doctor、safety、qrencode | 导出、二维码、白名单、菜单 |
 | 健康诊断 | `scripts/socks-doctor` | 核心诊断 | 否 | systemd、ss、curl | 只读和有限重试 |
 | 安全状态 | `scripts/socks-safety` | 核心安全 | 否 | 文件系统、systemd | 权限、完整工具回退、篡改、熔断 |
@@ -54,6 +54,8 @@
 ## 修改路由
 
 - 安装失败或镜像兼容：先看 `preflight.sh`、`install.sh`。
+- 不知道是否安装过或需要迁移 sing-box：改智能入口、`preflight.sh` 和 `overwrite.sh`；不得把
+  混合状态扩进自动迁移白名单。
 - Xshell复制粘贴错误：先看 `xshell-install.sh` 和 Xshell 教程。
 - Mac连接或本地部署错误：先看 `deploy.sh` 和 macOS教程。
 - 客户端导入、二维码或浏览器验收：只改客户端专题，不复制到平台教程。

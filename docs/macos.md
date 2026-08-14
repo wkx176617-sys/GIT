@@ -43,8 +43,8 @@ ssh root@你的VPS公网IP
 
 ```bash
 cd "$HOME/Desktop"
-git clone --branch v1.12.0 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.12.0
-cd "$HOME/Desktop/socks5-toolkit-v1.12.0"
+git clone --branch v1.12.1 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.12.1
+cd "$HOME/Desktop/socks5-toolkit-v1.12.1"
 ./deploy.sh root@你的VPS公网IP --port 31080
 ```
 
@@ -70,15 +70,12 @@ Mac 不需要长期保留本项目文件夹，也不需要保存本地节点清�
 不要重复克隆或删除现有目录。进入原项目，运行 `git status` 确认没有未保存修改，再按“升级
 稳定版本”操作。不清楚现有改动用途时停止，不要清理文件夹。
 
-## 可选情况：旧节点已经占用端口
+## 智能识别旧节点
 
-标准部署会先质检并在不安全时停止。只有报告明确显示旧 sing-box SOCKS5 可以迁移时才运行：
-
-```bash
-./deploy.sh root@你的VPS公网IP --port 31080 --overwrite
-```
-
-检测到 x-ui、Xray、v2ray 或未知程序时不要强行删除；进入[故障处理教程](troubleshooting.md)。
+第三步的同一条部署命令会自动处理安全状态，不需要再复制覆写命令。已有本项目节点会保留凭据；
+确认只有旧 sing-box 时会要求输入一次 `OVERWRITE`，随后备份旧配置、停用旧服务并生成全新
+代理凭据。检测到 x-ui、Xray、v2ray、混合状态或未知程序时会停止，不要强行删除；进入
+[故障处理教程](troubleshooting.md)。
 
 ## 可选情况：升级稳定版本
 

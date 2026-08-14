@@ -18,6 +18,7 @@ files=(
   "$project_dir/scripts/bbrctl"
   "$project_dir/scripts/release-check.sh"
   "$project_dir/tests/bbr-flow.sh"
+  "$project_dir/tests/smart-install-flow.sh"
   "$project_dir/tests/upgrade-flow.sh"
 )
 
@@ -54,7 +55,7 @@ grep -q -- '-O exit' "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.12.0"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.12.1"' "$project_dir/install.sh"
 grep -q 'for dependency_command in base64 .*qrencode' "$project_dir/install.sh"
 grep -q 'apt-get install -y .*qrencode' "$project_dir/install.sh"
 grep -q 'for required_command in base64 .*qrencode' "$project_dir/install.sh"
@@ -152,6 +153,19 @@ grep -q '20.04|22.04|24.04' "$project_dir/preflight.sh"
 grep -q '/root/gost-socks-backups' "$project_dir/overwrite.sh"
 grep -q 'systemctl disable --now sing-box' "$project_dir/overwrite.sh"
 grep -q 'trap rollback ERR' "$project_dir/overwrite.sh"
+grep -q 'exit 10' "$project_dir/preflight.sh"
+grep -q 'preflight_status == 10' "$project_dir/overwrite.sh"
+grep -q 'exec bash "$script_dir/overwrite.sh"' "$project_dir/xshell-install.sh"
+grep -q '旧代理账号密码已作废' "$project_dir/overwrite.sh"
+grep -q 'new_username != "$username"' "$project_dir/overwrite.sh"
+grep -q 'new_password != "$password"' "$project_dir/overwrite.sh"
+grep -q '! systemctl is-active --quiet sing-box' "$project_dir/overwrite.sh"
+grep -q '! systemctl is-enabled --quiet sing-box' "$project_dir/overwrite.sh"
+grep -q '\[\[ ! -e /etc/sing-box \]\]' "$project_dir/overwrite.sh"
+if rg -n 'MIGRATE_SOCKS_(USERNAME|PASSWORD)' "$project_dir/overwrite.sh"; then
+  printf '旧协议迁移不得继续复用旧代理凭据。\n' >&2
+  exit 1
+fi
 grep -q 'net.ipv4.tcp_congestion_control = bbr' "$project_dir/scripts/bbrctl"
 grep -q 'net.core.default_qdisc = fq' "$project_dir/scripts/bbrctl"
 grep -q 'trap rollback_enable ERR' "$project_dir/scripts/bbrctl"

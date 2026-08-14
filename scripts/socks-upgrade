@@ -21,12 +21,12 @@ usage() {
   cat <<'EOF'
 推荐用法：
   sudo socks-upgrade latest
-  sudo socks-upgrade v1.12.0
+  sudo socks-upgrade v1.12.1
 
 其他用法：
   sudo socks-upgrade --current
   sudo socks-upgrade --check latest
-  sudo socks-upgrade --check v1.12.0
+  sudo socks-upgrade --check v1.12.1
   sudo socks-upgrade v1.9.5 --allow-downgrade
   sudo socks-upgrade latest --no-bbr
 
@@ -82,7 +82,7 @@ validate_existing_node() {
 
 validate_target() {
   [[ $target_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-    || die "目标必须是 latest 或完整稳定标签，例如 v1.12.0；不接受 main 或省略版本号"
+    || die "目标必须是 latest 或完整稳定标签，例如 v1.12.1；不接受 main 或省略版本号"
   target_version=${target_tag#v}
   if [[ $current_version == "$target_version" ]]; then
     die "当前已经是 ${target_tag}，无需重复升级"
@@ -190,7 +190,7 @@ case "${1:-}" in
     action=current
     ;;
   --check)
-    [[ $# -eq 2 ]] || die "用法：socks-upgrade --check latest 或 socks-upgrade --check v1.12.0"
+    [[ $# -eq 2 ]] || die "用法：socks-upgrade --check latest 或 socks-upgrade --check v1.12.1"
     target_request=$2
     action=check
     check_only=true
@@ -211,7 +211,7 @@ case "${1:-}" in
     check_only=false
     ;;
   "") usage; exit 1 ;;
-  *) die "无法识别参数。目标必须是 latest 或类似 v1.12.0 的稳定标签" ;;
+  *) die "无法识别参数。目标必须是 latest 或类似 v1.12.1 的稳定标签" ;;
 esac
 
 [[ $TAG_CHECK_TIMEOUT_SECONDS =~ ^[0-9]+$ && $TAG_CHECK_TIMEOUT_SECONDS -ge 1 \
