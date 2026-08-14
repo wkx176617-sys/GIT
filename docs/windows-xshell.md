@@ -50,8 +50,8 @@ root@server:~#
 ```bash
 apt-get update
 apt-get install -y git ca-certificates
-git clone --branch v1.12.1 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.12.1
-bash /root/socks5-toolkit-v1.12.1/xshell-install.sh --port 31080
+git clone --branch v1.12.2 --depth 1 https://github.com/wkx176617-sys/GIT.git /root/socks5-toolkit-v1.12.2
+bash /root/socks5-toolkit-v1.12.2/xshell-install.sh --port 31080
 ```
 
 程序会先做只读质检，再安装固定版本 GOST。节点名称自动使用 VPS 公网 IP。安装成功后立即
@@ -72,12 +72,12 @@ socksctl guide
 
 只有第三步的 `git clone` 明确失败时才使用：
 
-1. 在 Windows 下载本项目 `v1.12.1` 源码压缩包并解压。
-2. 使用 Xshell 远程文件管理器或 Xftp，把整个目录上传到 `/root/socks5-toolkit-v1.12.1`。
+1. 在 Windows 下载本项目 `v1.12.2` 源码压缩包并解压。
+2. 使用 Xshell 远程文件管理器或 Xftp，把整个目录上传到 `/root/socks5-toolkit-v1.12.2`。
 3. 回到 `root@...#` 运行：
 
 ```bash
-bash /root/socks5-toolkit-v1.12.1/xshell-install.sh --port 31080
+bash /root/socks5-toolkit-v1.12.2/xshell-install.sh --port 31080
 ```
 
 ## 智能识别旧节点

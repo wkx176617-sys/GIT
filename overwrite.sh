@@ -87,7 +87,7 @@ password=$(jq -r --argjson port "$port" '.inbounds[]? | select(.type == "socks" 
 [[ $password =~ ^[A-Za-z0-9._-]{16,64}$ ]] || die "旧 SOCKS5 密码不存在或格式不兼容，不能自动迁移"
 
 if [[ $confirmed != true ]]; then
-  printf '将备份并停用 sing-box，用同一端口安装 GOST，并生成新的代理账号和密码。输入 OVERWRITE 确认：' "$port"
+  printf '将备份并停用 sing-box，用同一端口 %s 安装 GOST，并生成新的代理账号和密码。输入 OVERWRITE 确认：' "$port"
   read -r answer
   [[ $answer == OVERWRITE ]] || { printf '已取消，服务器没有变化。\n'; exit 0; }
 fi
