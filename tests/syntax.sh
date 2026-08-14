@@ -48,13 +48,17 @@ fi
 grep -q 'port=31080' "$project_dir/deploy.sh"
 grep -q 'VERSION install.sh' "$project_dir/deploy.sh"
 grep -q "remote_dir/scripts" "$project_dir/deploy.sh"
+grep -q 'ControlMaster=auto' "$project_dir/deploy.sh"
+grep -q 'ControlPersist=60' "$project_dir/deploy.sh"
+grep -q -- '-O exit' "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.9.5"' "$project_dir/install.sh"
-grep -q 'for dependency_command in .*qrencode' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.10.0"' "$project_dir/install.sh"
+grep -q 'for dependency_command in base64 .*qrencode' "$project_dir/install.sh"
 grep -q 'apt-get install -y .*qrencode' "$project_dir/install.sh"
-grep -q 'for required_command in .*qrencode' "$project_dir/install.sh"
+grep -q 'for required_command in base64 .*qrencode' "$project_dir/install.sh"
+grep -q '仅缺失时执行一次 apt 更新' "$project_dir/install.sh"
 grep -q 'control_source="$script_dir/scripts/socksctl"' "$project_dir/install.sh"
 if grep -q 'control_source="$script_dir/socksctl"' "$project_dir/install.sh"; then
   printf '安装器仍可能优先使用根目录遗留的旧 socksctl。\n' >&2
@@ -63,7 +67,7 @@ fi
 grep -q '工具版本：v$TOOL_VERSION_CURRENT' "$project_dir/install.sh"
 grep -q '安装包发生混版' "$project_dir/xshell-install.sh"
 grep -q 'refresh-ip' "$project_dir/scripts/socksctl"
-grep -q 'upgrade vX.Y.Z.*内部先只读检查再确认' "$project_dir/scripts/socksctl"
+grep -q 'upgrade latest|vX.Y.Z.*一条命令切换稳定版本' "$project_dir/scripts/socksctl"
 grep -q 'exec "$UPGRADE" "$@"' "$project_dir/scripts/socksctl"
 grep -q 'detect_public_ip_consensus' "$project_dir/scripts/socks-refresh-ip"
 grep -q 'winner_count >= 2' "$project_dir/scripts/socks-refresh-ip"
@@ -71,14 +75,26 @@ grep -q '输入 REFRESH-IP 确认' "$project_dir/scripts/socks-refresh-ip"
 grep -q 'trap rollback ERR' "$project_dir/scripts/socks-refresh-ip"
 grep -q -- '--check' "$project_dir/scripts/socks-refresh-ip"
 grep -q 'proxy_public_ip' "$project_dir/scripts/socks-refresh-ip"
-grep -q '升级命令禁止降级' "$project_dir/scripts/socks-upgrade"
 grep -q '没有发现本项目节点' "$project_dir/scripts/socks-upgrade"
 grep -q '推荐用法' "$project_dir/scripts/socks-upgrade"
-grep -q '正式升级会先执行与 --check 相同的只读检查' "$project_dir/scripts/socks-upgrade"
-grep -q 'UPGRADE-%s' "$project_dir/scripts/socks-upgrade"
+grep -q 'socks-upgrade latest' "$project_dir/scripts/socks-upgrade"
+grep -q '不再重复询问' "$project_dir/scripts/socks-upgrade"
+grep -q -- '--allow-downgrade' "$project_dir/scripts/socks-upgrade"
+grep -q 'find_compatible_snapshot' "$project_dir/scripts/socks-upgrade"
+grep -q '使用本机健康快照，无需下载' "$project_dir/scripts/socks-upgrade"
+if rg -n '输入 (UPGRADE|DOWNGRADE)' "$project_dir/scripts/socks-upgrade" "$project_dir/install.sh"; then
+  printf '版本切换不应重复要求第二个确认口令。\n' >&2
+  exit 1
+fi
 grep -q 'git ls-remote --tags' "$project_dir/scripts/socks-upgrade"
 grep -q 'TAG_CHECK_TIMEOUT_SECONDS' "$project_dir/scripts/socks-upgrade"
 grep -q 'CLONE_TIMEOUT_SECONDS' "$project_dir/scripts/socks-upgrade"
+clone_line=$(grep -n 'advice.detachedHead=false clone' "$project_dir/scripts/socks-upgrade" | cut -d: -f1)
+switch_lock_line=$(grep -n 'flock -n 9' "$project_dir/scripts/socks-upgrade" | cut -d: -f1)
+[[ $clone_line =~ ^[0-9]+$ && $switch_lock_line =~ ^[0-9]+$ && $clone_line -lt $switch_lock_line ]] || {
+  printf '稳定包下载应在获取维护锁之前完成，避免慢网络长期阻塞其他管理任务。\n' >&2
+  exit 1
+}
 grep -q 'preserve_node == true && -x $BINARY_PATH' "$project_dir/install.sh"
 grep -q 'existing_gost_identity=.*-V' "$project_dir/install.sh"
 grep -q 'existing_gost_identity == "gost v$GOST_VERSION"' "$project_dir/install.sh"
@@ -119,6 +135,10 @@ grep -q 'RestartSec=5s' "$project_dir/install.sh"
 grep -q 'RECOVERY_LOOP' "$project_dir/scripts/socksctl"
 grep -q 'SOCKS5 中文新手菜单' "$project_dir/scripts/socksctl"
 grep -q 'allow-downgrade' "$project_dir/install.sh"
+if grep -q 'apt-get' "$project_dir/xshell-install.sh"; then
+  printf 'Xshell入口不应在安装器之前重复运行 apt 更新或依赖安装。\n' >&2
+  exit 1
+fi
 if rg -n 'RESTART_RECOVERED|RESTART_RECOVERY_FAILED' "$project_dir/scripts/socksctl"; then
   printf '重启失败仍在自动恢复，不符合克制维修规则。\n' >&2
   exit 1
@@ -218,8 +238,13 @@ fi
 
 write_upgrade_fixture 1.8.1
 expect_upgrade_failure '无需重复升级' --check v1.8.1
-expect_upgrade_failure '升级命令禁止降级' --check v1.8.0
-expect_upgrade_failure '目标必须是完整稳定标签' --check latest
+expect_upgrade_failure '缺少安全快照模块' --check v1.8.0
+expect_upgrade_failure '目标必须是 latest 或完整稳定标签' --check main
+
+write_upgrade_fixture 1.8.1
+latest_check_output=$(env "${upgrade_env[@]}" "$project_dir/scripts/socks-upgrade" --check latest)
+grep -Fq '目标版本：v' <<<"$latest_check_output"
+grep -Fq 'GitHub 已找到' <<<"$latest_check_output"
 
 write_upgrade_fixture 1.8.0
 expect_upgrade_failure 'GitHub 上没有找到稳定标签' --check v9.9.9

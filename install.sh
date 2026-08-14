@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
-readonly TOOL_VERSION_CURRENT="1.9.5"
+readonly TOOL_VERSION_CURRENT="1.10.0"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -24,7 +24,7 @@ usage() {
 
 节点名称默认使用 VPS 公网 IP。用户名和密码会在首次安装时自动生成。
 重复安装会保留已有名称和凭据；特殊情况下可以使用 --name 自定义。
---allow-downgrade 仅供按版本说明执行的高级人工回退，不属于日常升级路径。
+--allow-downgrade 是高级人工回退的一次性明确授权，不再追加第二次口令确认。
 EOF
 }
 
@@ -33,19 +33,16 @@ die() {
   exit 1
 }
 
+install_ubuntu_dependencies() {
+  command -v apt-get >/dev/null 2>&1 || die "系统缺少运行依赖，且无法使用 apt-get 补齐"
+  export DEBIAN_FRONTEND=noninteractive
+  printf '正在补齐 Ubuntu 运行依赖（仅缺失时执行一次 apt 更新）...\n'
+  apt-get update
+  apt-get install -y ca-certificates coreutils curl findutils iproute2 passwd qrencode tar util-linux
+}
+
 [[ ${1:-} != "--help" && ${1:-} != "-h" ]] || { usage; exit 0; }
 [[ ${1:-} != "--version" ]] || { printf '%s\n' "$TOOL_VERSION_CURRENT"; exit 0; }
-[[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"
-[[ -d /run/systemd/system ]] || die "此系统未使用 systemd"
-if ! command -v flock >/dev/null 2>&1; then
-  command -v apt-get >/dev/null 2>&1 || die "缺少 flock（util-linux）"
-  apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y util-linux
-fi
-if [[ ${SOCKS_LOCK_HELD:-0} != 1 ]]; then
-  exec 8>"$LOCK_FILE"
-  flock -n 8 || die "另一个安装、覆写或维修任务正在运行，请等待完成后重试"
-fi
 
 node_name=""
 port=""
@@ -70,25 +67,33 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+[[ $(id -u) -eq 0 ]] || die "请使用 root 或 sudo 运行"
+[[ -d /run/systemd/system ]] || die "此系统未使用 systemd"
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.9.5 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.10.0 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
 esac
 
+dependencies_bootstrapped=false
+if ! command -v flock >/dev/null 2>&1; then
+  install_ubuntu_dependencies
+  dependencies_bootstrapped=true
+fi
+if [[ ${SOCKS_LOCK_HELD:-0} != 1 ]]; then
+  exec 8>"$LOCK_FILE"
+  flock -n 8 || die "另一个安装、覆写或维修任务正在运行，请等待完成后重试"
+fi
+
 missing_dependency=false
-for dependency_command in curl find qrencode sha256sum ss tar useradd; do
+for dependency_command in base64 curl find qrencode sha256sum ss tar useradd; do
   command -v "$dependency_command" >/dev/null 2>&1 || missing_dependency=true
 done
-if [[ $missing_dependency == true ]]; then
-  command -v apt-get >/dev/null 2>&1 || die "系统缺少运行依赖，且无法使用 apt-get 补齐"
-  export DEBIAN_FRONTEND=noninteractive
-  printf '正在补齐 Ubuntu 运行依赖（包含本地二维码组件）...\n'
-  apt-get update
-  apt-get install -y ca-certificates coreutils curl findutils iproute2 passwd qrencode tar
+if [[ $missing_dependency == true && $dependencies_bootstrapped != true ]]; then
+  install_ubuntu_dependencies
 fi
 
 read_env_value() {
@@ -145,10 +150,7 @@ version_is_newer() {
 if version_is_newer "$existing_tool_version" "$TOOL_VERSION_CURRENT"; then
   [[ $allow_downgrade == true ]] \
     || die "检测到已安装 v${existing_tool_version}，高于当前 v${TOOL_VERSION_CURRENT}。为防止误降级已停止；确认需要时添加 --allow-downgrade"
-  [[ -t 0 ]] || die "降级必须在交互式 SSH/Xshell 窗口中确认"
-  printf '降级可能恢复旧行为。输入 DOWNGRADE 确认：'
-  read -r downgrade_answer
-  [[ $downgrade_answer == DOWNGRADE ]] || die "已取消降级"
+  printf '已通过 --allow-downgrade 明确授权切换到较旧版本。\n'
 fi
 
 available_kb=$(df -Pk / | awk 'NR == 2 {print $4}')
@@ -185,7 +187,7 @@ case "$(uname -m)" in
   *) die "不支持的 CPU 架构：$(uname -m)" ;;
 esac
 
-for required_command in curl find install qrencode sha256sum ss systemctl tar useradd; do
+for required_command in base64 curl find install qrencode sha256sum ss systemctl tar useradd; do
   command -v "$required_command" >/dev/null 2>&1 || die "缺少系统命令：$required_command"
 done
 

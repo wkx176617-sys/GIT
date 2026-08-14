@@ -24,7 +24,7 @@ usage() {
   export [类型]     导出客户端连接信息：all、v2rayn、shadowrocket
   qr [类型]         在终端生成二维码：v2rayn、shadowrocket
   refresh-ip        VPS更换公网IP后安全更新节点记录和导入信息
-  upgrade vX.Y.Z    一条命令安全升级；内部先只读检查再确认
+  upgrade latest|vX.Y.Z  一条命令切换稳定版本；旧版需健康快照
   logs [行数]       查看日志，默认 100 行
   restart           重启服务
   rotate            自动生成新密码并重启
@@ -221,7 +221,7 @@ case "$command_name" in
     ;;
   upgrade)
     require_root
-    [[ -x $UPGRADE ]] || die "尚未安装安全升级模块，请按安全升级教程先引入一次"
+    [[ -x $UPGRADE ]] || die "尚未安装安全版本切换模块，请按版本切换教程先引入一次"
     exec "$UPGRADE" "$@"
     ;;
   logs)
@@ -505,7 +505,7 @@ SOCKS5 中文新手菜单
   7. 手工恢复最后可用状态（有二次确认）
   8. 查看节点信息（密码打码）
   9. VPS更换公网IP后更新节点记录
-  10. 查询本项目工具版本（升级请看安全升级专题）
+  10. 查询本项目工具版本（切换版本请看安全版本切换专题）
   0. 退出，不做任何操作
 EOF
     printf '请输入一个数字后按回车：'
@@ -521,7 +521,7 @@ EOF
       8) exec "$0" info ;;
       9) exec "$0" refresh-ip ;;
       10)
-        [[ -x $UPGRADE ]] || die "尚未安装安全升级模块，请按安全升级教程先引入一次"
+        [[ -x $UPGRADE ]] || die "尚未安装安全版本切换模块，请按版本切换教程先引入一次"
         exec "$UPGRADE" --current
         ;;
       0) printf '已退出，没有修改任何内容。\n' ;;

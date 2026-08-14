@@ -71,17 +71,24 @@ for required_file in VERSION install.sh uninstall.sh preflight.sh overwrite.sh s
 done
 
 remote_dir="/tmp/gost-socks-deploy-$$"
+ssh_control_dir=$(mktemp -d /tmp/gost-socks-ssh.XXXXXX)
+ssh_control_path="$ssh_control_dir/control"
+ssh_options=(-o ControlMaster=auto -o ControlPersist=60 -o ControlPath="$ssh_control_path")
 
 cleanup() {
-  ssh "$target" "rm -rf '$remote_dir'" >/dev/null 2>&1 || true
+  if [[ -S $ssh_control_path ]]; then
+    ssh "${ssh_options[@]}" "$target" "rm -rf '$remote_dir'" >/dev/null 2>&1 || true
+    ssh -S "$ssh_control_path" -O exit "$target" >/dev/null 2>&1 || true
+  fi
+  rm -rf -- "$ssh_control_dir"
 }
 trap cleanup EXIT
 
-printf '正在连接 %s...\n' "$target"
-ssh "$target" "mkdir -p '$remote_dir/scripts'"
-scp "$project_dir/VERSION" "$project_dir/install.sh" "$project_dir/uninstall.sh" \
+printf '正在连接 %s（本次部署复用同一条 SSH 认证连接）...\n' "$target"
+ssh "${ssh_options[@]}" "$target" "mkdir -p '$remote_dir/scripts'"
+scp "${ssh_options[@]}" "$project_dir/VERSION" "$project_dir/install.sh" "$project_dir/uninstall.sh" \
   "$project_dir/preflight.sh" "$project_dir/overwrite.sh" "$target:$remote_dir/"
-scp "$project_dir/scripts/socksctl" "$project_dir/scripts/socks-doctor" \
+scp "${ssh_options[@]}" "$project_dir/scripts/socksctl" "$project_dir/scripts/socks-doctor" \
   "$project_dir/scripts/socks-safety" "$project_dir/scripts/socks-refresh-ip" \
   "$project_dir/scripts/socks-upgrade" \
   "$target:$remote_dir/scripts/"
@@ -96,6 +103,6 @@ if [[ $overwrite == true ]]; then
 else
   remote_command="if [ \"\$(id -u)\" -eq 0 ]; then bash '$remote_dir/preflight.sh' --port '$port' && bash '$remote_dir/install.sh' $install_args; else sudo bash '$remote_dir/preflight.sh' --port '$port' && sudo bash '$remote_dir/install.sh' $install_args; fi"
 fi
-ssh -t "$target" "$remote_command"
+ssh "${ssh_options[@]}" -t "$target" "$remote_command"
 
 printf '\n部署完成。请立即把终端输出的节点凭据保存到密码管理器。\n'

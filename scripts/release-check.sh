@@ -32,16 +32,18 @@ grep -Fq -- "--branch $tag" docs/macos.md || { printf 'macOS 教程下载命令�
 grep -Fq '[macOS 部署指南](docs/macos.md)' README.md || { printf 'README 未提供macOS专用入口\n' >&2; exit 1; }
 grep -Fq '[客户端导入与网络验收](docs/clients.md)' README.md \
   || { printf 'README 未提供客户端专用入口\n' >&2; exit 1; }
-grep -Fq '[安全升级到指定版本](docs/upgrade.md)' README.md \
-  || { printf 'README 未提供独立安全升级入口\n' >&2; exit 1; }
-grep -Fq 'socksctl upgrade v目标版本号' docs/upgrade.md \
-  && grep -Fq '自动先执行只读检查' docs/upgrade.md \
+grep -Fq '[安全切换稳定版本](docs/upgrade.md)' README.md \
+  || { printf 'README 未提供独立安全版本切换入口\n' >&2; exit 1; }
+grep -Fq 'socksctl upgrade latest' docs/upgrade.md \
+  && grep -Fq 'socksctl upgrade v目标版本号' docs/upgrade.md \
+  && grep -Fq '不再要求输入第二个确认口令' docs/upgrade.md \
+  && grep -Fq 'socksctl upgrade v旧版本号 --allow-downgrade' docs/upgrade.md \
   && grep -Fq 'socksctl upgrade --check v目标版本号' docs/upgrade.md \
   && grep -Fq '`--check` 严格只读' docs/upgrade.md \
   && grep -Fq '智能安装 / 升级路线' docs/upgrade.md \
-  || { printf '升级专题缺少单命令主路径、内置预检、可选只读检查或现状未知分流\n' >&2; exit 1; }
-[[ $(grep -Fc 'socksctl upgrade v目标版本号' docs/upgrade.md) -eq 1 ]] \
-  || { printf '升级专题必须只有一条已安装节点的推荐正式命令\n' >&2; exit 1; }
+  || { printf '版本切换专题缺少最新版主路径、单次授权、快照降版、只读检查或现状分流\n' >&2; exit 1; }
+[[ $(grep -Fc 'socksctl upgrade latest' docs/upgrade.md) -eq 1 ]] \
+  || { printf '版本切换专题必须只有一条已安装节点的最新版推荐命令\n' >&2; exit 1; }
 if grep -Fq 'scripts/socks-upgrade --check' docs/upgrade.md; then
   printf '早期节点推荐路径不应要求单独执行只读检查\n' >&2
   exit 1
@@ -77,8 +79,8 @@ grep -Fq '正常运行只允许 GOST 作为业务常驻进程' AGENTS.md \
   || { printf '仓库规则缺少常驻进程边界\n' >&2; exit 1; }
 grep -Fq '单一主路径' AGENTS.md \
   || { printf '仓库规则缺少新手单一主路径边界\n' >&2; exit 1; }
-grep -Fq '升级模块不得兼任首次安装、降级或其他代理迁移' AGENTS.md \
-  || { printf '仓库规则缺少安装与指定版本升级边界\n' >&2; exit 1; }
+grep -Fq '降版只恢复身份一致、校验通过的本机健康快照' AGENTS.md \
+  || { printf '仓库规则缺少稳定版本切换与安全降版边界\n' >&2; exit 1; }
 grep -Fq '[开发规则](AGENTS.md)' README.md \
   || { printf 'README 未提供仓库开发规则入口\n' >&2; exit 1; }
 [[ -f assets/readme-hero.jpg ]] || { printf 'README 缺少本地视觉横幅\n' >&2; exit 1; }
@@ -159,17 +161,17 @@ if rg -n 'git[[:space:]]+clone|xshell-install\.sh[[:space:]]+--port|\./deploy\.s
   printf 'README 重复了平台安装命令，应只链接唯一平台专题\n' >&2
   exit 1
 fi
-if rg -n 'socks-upgrade[[:space:]]+(--check|v[0-9])' \
+if rg -n 'socks-upgrade[[:space:]]+(--check|latest|v[0-9])' \
   docs/tutorial.md docs/macos.md docs/windows-xshell.md; then
-  printf '总路线或平台教程重复了升级命令，应只链接唯一升级专题\n' >&2
+  printf '总路线或平台教程重复了版本切换命令，应只链接唯一专题\n' >&2
   exit 1
 fi
 grep -Fq '[客户端导入与网络验收](clients.md)' docs/macos.md \
   && grep -Fq '[客户端导入与网络验收](clients.md)' docs/windows-xshell.md \
   || { printf '平台教程没有统一进入客户端专题\n' >&2; exit 1; }
-grep -Fq '[安全升级到指定版本](upgrade.md)' docs/macos.md \
-  && grep -Fq '[安全升级到指定版本](upgrade.md)' docs/windows-xshell.md \
-  || { printf '平台教程没有统一进入安全升级专题\n' >&2; exit 1; }
+grep -Fq '[安全切换稳定版本](upgrade.md)' docs/macos.md \
+  && grep -Fq '[安全切换稳定版本](upgrade.md)' docs/windows-xshell.md \
+  || { printf '平台教程没有统一进入安全版本切换专题\n' >&2; exit 1; }
 
 link_failed=false
 while IFS= read -r markdown_file; do

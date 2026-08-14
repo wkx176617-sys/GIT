@@ -39,13 +39,14 @@ ssh root@你的VPS公网IP
 
 ```bash
 cd "$HOME/Desktop"
-git clone --branch v1.9.5 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.9.5
-cd "$HOME/Desktop/socks5-toolkit-v1.9.5"
+git clone --branch v1.10.0 --depth 1 https://github.com/wkx176617-sys/GIT.git socks5-toolkit-v1.10.0
+cd "$HOME/Desktop/socks5-toolkit-v1.10.0"
 ./deploy.sh root@你的VPS公网IP --port 31080
 ```
 
-脚本通过 SSH/SCP 上传所需模块，先做只读质检，再安装固定版本 GOST。过程中可能需要再次
-输入服务器密码。安装成功后立即把端口、用户名和密码保存到密码管理器。
+脚本通过 SSH/SCP 上传所需模块，先做只读质检，再安装固定版本 GOST。同一次部署会复用短期
+SSH 认证连接并在结束时关闭，避免每次上传都重新登录。安装成功后立即把端口、用户名和密码
+保存到密码管理器。
 
 ## 第四步：进入客户端教程
 
@@ -77,8 +78,8 @@ Mac 不需要长期保留本项目文件夹，也不需要保存本地节点清�
 
 ## 可选情况：升级稳定版本
 
-不要重复这里的部署步骤。SSH登录服务器后，统一按照[安全升级到指定版本](upgrade.md)操作。
-升级器只接受已有本项目节点，不会把其他代理当成本项目覆写。
+不要重复这里的部署步骤。SSH登录服务器后，统一按照[安全切换稳定版本](upgrade.md)操作。
+版本切换器只接受已有本项目节点，不会把其他代理当成本项目覆写。
 
 ## 连接问题
 

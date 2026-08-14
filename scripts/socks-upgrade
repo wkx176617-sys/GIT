@@ -9,6 +9,10 @@ readonly SERVICE_FILE="${SOCKS_SERVICE_FILE:-$DEFAULT_SERVICE_FILE}"
 readonly REPOSITORY_URL="${SOCKS_REPOSITORY_URL:-https://github.com/wkx176617-sys/GIT.git}"
 readonly DEFAULT_LOCK_FILE="/run/lock/gost-socks-main.lock"
 readonly LOCK_FILE="${SOCKS_LOCK_FILE:-$DEFAULT_LOCK_FILE}"
+readonly DEFAULT_SAFETY_BIN="/usr/local/sbin/socks-safety"
+readonly SAFETY_BIN="${SOCKS_SAFETY_BIN:-$DEFAULT_SAFETY_BIN}"
+readonly DEFAULT_SNAPSHOT_ROOT="/var/lib/gost-socks-safety/snapshots"
+readonly SNAPSHOT_ROOT="${SOCKS_SNAPSHOT_ROOT:-$DEFAULT_SNAPSHOT_ROOT}"
 readonly TAG_CHECK_TIMEOUT_SECONDS="${SOCKS_TAG_CHECK_TIMEOUT_SECONDS:-20}"
 readonly CLONE_TIMEOUT_SECONDS="${SOCKS_CLONE_TIMEOUT_SECONDS:-120}"
 readonly TIMEOUT_BIN="${SOCKS_TIMEOUT_BIN:-timeout}"
@@ -16,14 +20,18 @@ readonly TIMEOUT_BIN="${SOCKS_TIMEOUT_BIN:-timeout}"
 usage() {
   cat <<'EOF'
 推荐用法：
-  sudo socks-upgrade v1.9.5
+  sudo socks-upgrade latest
+  sudo socks-upgrade v1.10.0
 
 其他用法：
   sudo socks-upgrade --current
-  sudo socks-upgrade --check v1.9.5
+  sudo socks-upgrade --check latest
+  sudo socks-upgrade --check v1.10.0
+  sudo socks-upgrade v1.9.5 --allow-downgrade
 
-只升级已经由本项目管理的 GOST SOCKS5 节点。不会用于首次安装、降级或迁移其他代理。
-正式升级会先执行与 --check 相同的只读检查，通过后才请求人工确认。
+只切换已经由本项目管理的 GOST SOCKS5 节点版本。不会用于首次安装或迁移其他代理。
+输入正式命令即视为授权执行，通过只读检查后不再重复询问。
+降到旧版只恢复身份一致且校验通过的健康快照，并要求在同一命令中明确添加 --allow-downgrade。
 --check 只供提前体检，不修改服务、配置或凭据。
 EOF
 }
@@ -72,32 +80,106 @@ validate_existing_node() {
 
 validate_target() {
   [[ $target_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-    || die "目标必须是完整稳定标签，例如 v1.9.5；不接受 main、latest 或省略版本号"
+    || die "目标必须是 latest 或完整稳定标签，例如 v1.10.0；不接受 main 或省略版本号"
   target_version=${target_tag#v}
   if [[ $current_version == "$target_version" ]]; then
     die "当前已经是 ${target_tag}，无需重复升级"
   fi
+  switch_direction=upgrade
   if [[ $current_version != legacy ]] && ! version_is_newer "$target_version" "$current_version"; then
-    die "目标 $target_tag 不高于当前 v${current_version}。升级命令禁止降级"
+    switch_direction=downgrade
   fi
 }
 
-check_remote_tag() {
+require_remote_tools() {
   command -v git >/dev/null 2>&1 || die "缺少 git；请先运行 apt-get update && apt-get install -y git ca-certificates"
   command -v "$TIMEOUT_BIN" >/dev/null 2>&1 \
     || die "缺少 timeout（coreutils）；请先运行 apt-get install -y coreutils"
-  local remote_output
+}
+
+query_remote_tags() {
+  local pattern=$1
+  require_remote_tools
   if ! remote_output=$(GIT_TERMINAL_PROMPT=0 "$TIMEOUT_BIN" --signal=TERM \
     "$TAG_CHECK_TIMEOUT_SECONDS" git ls-remote --tags "$REPOSITORY_URL" \
-    "refs/tags/$target_tag" "refs/tags/$target_tag^{}" 2>/dev/null); then
+    "$pattern" 2>/dev/null); then
     die "查询稳定标签超时或失败；没有修改服务器，请检查网络后重试"
   fi
+}
+
+extract_remote_commit() {
   remote_commit=$(printf '%s\n' "$remote_output" | awk -v ref="refs/tags/$target_tag" \
     '$2 == ref {direct=$1} $2 == ref "^{}" {peeled=$1} END {print peeled ? peeled : direct}')
   [[ $remote_commit =~ ^[0-9a-f]{40}$ ]] \
     || die "GitHub 上没有找到稳定标签 ${target_tag}，或服务器暂时无法访问 GitHub"
 }
 
+resolve_latest_target() {
+  query_remote_tags 'refs/tags/v*'
+  target_tag=$(printf '%s\n' "$remote_output" | awk '
+    $2 ~ /^refs\/tags\/v[0-9]+\.[0-9]+\.[0-9]+(\^\{\})?$/ {
+      ref=$2
+      sub(/^refs\/tags\//, "", ref)
+      sub(/\^\{\}$/, "", ref)
+      version=substr(ref, 2)
+      split(version, part, ".")
+      major=part[1]+0; minor=part[2]+0; patch=part[3]+0
+      if (!found || major>best_major \
+          || (major==best_major && minor>best_minor) \
+          || (major==best_major && minor==best_minor && patch>best_patch)) {
+        found=1; best=ref; best_major=major; best_minor=minor; best_patch=patch
+      }
+    }
+    END {if (found) print best}')
+  [[ $target_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || die "GitHub 上没有找到可用的稳定版本标签"
+  extract_remote_commit
+}
+
+check_explicit_remote_tag() {
+  query_remote_tags "refs/tags/$target_tag*"
+  extract_remote_commit
+}
+
+find_compatible_snapshot() {
+  [[ -x $SAFETY_BIN ]] || die "缺少安全快照模块，不能切换到旧版本"
+  local name candidate snapshot_version snapshot_node snapshot_ip snapshot_port
+  local snapshot_username snapshot_password version_seen=false
+  snapshot_path=""
+  for name in last-good previous-good; do
+    candidate="$SNAPSHOT_ROOT/$name"
+    [[ -f $candidate/config/node.env ]] || continue
+    snapshot_version=$(read_snapshot_value "$candidate/config/node.env" TOOL_VERSION)
+    [[ $snapshot_version == "$target_version" ]] || continue
+    version_seen=true
+    snapshot_node=$(read_snapshot_value "$candidate/config/node.env" NODE_NAME)
+    snapshot_ip=$(read_snapshot_value "$candidate/config/node.env" PUBLIC_IP)
+    snapshot_port=$(read_snapshot_value "$candidate/config/node.env" SOCKS_PORT)
+    snapshot_username=$(read_snapshot_value "$candidate/config/node.env" SOCKS_USERNAME)
+    snapshot_password=$(read_snapshot_value "$candidate/config/node.env" SOCKS_PASSWORD)
+    [[ $snapshot_node == "$checked_node_name" \
+       && $snapshot_ip == "$checked_public_ip" \
+       && $snapshot_port == "$checked_port" \
+       && $snapshot_username == "$checked_username" \
+       && $snapshot_password == "$checked_password" ]] || continue
+    "$SAFETY_BIN" verify "$candidate" >/dev/null \
+      || die "找到 v${target_version} 快照，但完整性校验失败；没有执行版本切换"
+    snapshot_path=$candidate
+    snapshot_name=$name
+    return 0
+  done
+  if [[ $version_seen == true ]]; then
+    die "找到 v${target_version} 快照，但节点身份、端口或凭据不一致；没有执行版本切换"
+  fi
+  die "没有找到 v${target_version} 的健康快照。旧版本只允许恢复本机 last-good/previous-good 中已验证的状态"
+}
+
+read_snapshot_value() {
+  local file=$1 key=$2
+  awk -F= -v wanted="$key" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' "$file" 2>/dev/null || true
+}
+
+allow_downgrade=false
 case "${1:-}" in
   --help|-h) usage; exit 0 ;;
   --current)
@@ -105,19 +187,24 @@ case "${1:-}" in
     action=current
     ;;
   --check)
-    [[ $# -eq 2 ]] || die "用法：socks-upgrade --check v1.9.5"
-    target_tag=$2
+    [[ $# -eq 2 ]] || die "用法：socks-upgrade --check latest 或 socks-upgrade --check v1.10.0"
+    target_request=$2
     action=check
     check_only=true
     ;;
-  v[0-9]*.[0-9]*.[0-9]*)
-    [[ $# -eq 1 ]] || die "升级命令只接受一个目标稳定标签"
-    target_tag=$1
-    action=upgrade
+  latest|v[0-9]*.[0-9]*.[0-9]*)
+    target_request=$1
+    shift
+    if [[ ${1:-} == --allow-downgrade ]]; then
+      allow_downgrade=true
+      shift
+    fi
+    [[ $# -eq 0 ]] || die "版本切换只接受目标版本；降版时可追加 --allow-downgrade"
+    action=switch
     check_only=false
     ;;
   "") usage; exit 1 ;;
-  *) die "无法识别参数。目标必须像 v1.9.5" ;;
+  *) die "无法识别参数。目标必须是 latest 或类似 v1.10.0 的稳定标签" ;;
 esac
 
 [[ $TAG_CHECK_TIMEOUT_SECONDS =~ ^[0-9]+$ && $TAG_CHECK_TIMEOUT_SECONDS -ge 1 \
@@ -125,10 +212,8 @@ esac
 [[ $CLONE_TIMEOUT_SECONDS =~ ^[0-9]+$ && $CLONE_TIMEOUT_SECONDS -ge 1 \
    && $CLONE_TIMEOUT_SECONDS -le 600 ]] || die "版本下载超时必须为 1-600 秒"
 
-uses_system_paths=false
 if [[ $CONFIG_DIR == "$DEFAULT_CONFIG_DIR" || $SERVICE_FILE == "$DEFAULT_SERVICE_FILE" \
    || $LOCK_FILE == "$DEFAULT_LOCK_FILE" ]]; then
-  uses_system_paths=true
   require_root
 fi
 validate_existing_node
@@ -136,28 +221,73 @@ if [[ $action == current ]]; then
   printf '当前工具版本：%s\n' "${current_version/#legacy/早期版本（未记录版本号）}"
   exit 0
 fi
+if [[ $target_request == latest ]]; then
+  resolve_latest_target
+else
+  target_tag=$target_request
+fi
 validate_target
-check_remote_tag
+if [[ $allow_downgrade == true && $switch_direction != downgrade ]]; then
+  die "--allow-downgrade 只用于切换到低于当前版本的健康快照"
+fi
+if [[ $check_only == true && $target_request != latest ]]; then
+  check_explicit_remote_tag
+fi
 checked_current_version=$current_version
 checked_node_name=$node_name
 checked_public_ip=$public_ip
 checked_port=$port
 checked_username=$username
 checked_password=$password
-printf '升级只读检查通过：\n'
+if [[ $switch_direction == downgrade ]]; then
+  find_compatible_snapshot
+  if [[ $check_only == false && $allow_downgrade != true ]]; then
+    die "切换到旧版必须在同一命令中明确添加 --allow-downgrade"
+  fi
+fi
+printf '版本切换只读检查通过：\n'
 printf '  当前版本：%s\n' "${current_version/#legacy/早期版本（未记录版本号）}"
 printf '  目标版本：%s\n' "$target_tag"
-printf '  节点端口：%s（升级时保留）\n' "$port"
+printf '  切换方向：%s\n' "$([[ $switch_direction == downgrade ]] && printf '恢复旧版快照' || printf '更新到稳定版')"
+printf '  节点端口：%s（切换时保留）\n' "$port"
 printf '  账号密码：保留，不在此处显示\n'
-printf '  目标标签：GitHub 已找到\n'
+if [[ $switch_direction == downgrade ]]; then
+  printf '  恢复来源：%s（完整性与节点身份已通过）\n' "$snapshot_name"
+else
+  if [[ $target_request == latest || $check_only == true ]]; then
+    printf '  目标标签：GitHub 已找到\n'
+  else
+    printf '  目标标签：将在下载时按完整标签校验\n'
+  fi
+fi
 [[ $check_only == false ]] || { printf '只读检查结束，没有修改服务器。\n'; exit 0; }
 
-if [[ $uses_system_paths == true ]]; then
-  [[ -t 0 ]] || die "正式升级必须在交互式 SSH/Xshell 窗口中确认"
+if [[ $switch_direction == upgrade ]]; then
+  require_remote_tools
+  tmp_dir=$(mktemp -d)
+  cleanup() { rm -rf -- "$tmp_dir"; }
+  trap cleanup EXIT
+  printf '正在下载稳定版 %s...\n' "$target_tag"
+  if ! GIT_TERMINAL_PROMPT=0 "$TIMEOUT_BIN" --signal=TERM "$CLONE_TIMEOUT_SECONDS" \
+    git -c advice.detachedHead=false clone --quiet --branch "$target_tag" --depth 1 \
+    "$REPOSITORY_URL" "$tmp_dir/package"; then
+    die "下载稳定版超时或失败；没有开始安装，请检查网络后重试"
+  fi
+  downloaded_commit=$(git -C "$tmp_dir/package" rev-parse HEAD 2>/dev/null || true)
+  local_tag_commit=$(git -C "$tmp_dir/package" rev-parse "$target_tag^{}" 2>/dev/null || true)
+  [[ $downloaded_commit =~ ^[0-9a-f]{40}$ && $downloaded_commit == "$local_tag_commit" ]] \
+    || die "下载包没有精确检出目标稳定标签；没有执行版本切换"
+  if [[ $target_request == latest ]]; then
+    [[ $downloaded_commit == "$remote_commit" ]] \
+      || die "最新版标签在检查期间发生变化；没有执行版本切换，请重新运行命令"
+  fi
+  package_version=$(tr -d '[:space:]' <"$tmp_dir/package/VERSION" 2>/dev/null || true)
+  installer_version=$(bash "$tmp_dir/package/install.sh" --version 2>/dev/null || true)
+  [[ $package_version == "$target_version" && $installer_version == "$target_version" ]] \
+    || die "下载包版本不一致；没有执行版本切换"
+  [[ -f $tmp_dir/package/scripts/socks-upgrade ]] \
+    || die "目标版本缺少安全版本切换模块；没有执行版本切换"
 fi
-printf '输入 UPGRADE-%s 确认升级：' "$target_tag"
-read -r answer
-[[ $answer == "UPGRADE-$target_tag" ]] || { printf '已取消，没有修改服务器。\n'; exit 0; }
 
 command -v flock >/dev/null 2>&1 || die "缺少 flock（util-linux）"
 exec 9>"$LOCK_FILE"
@@ -170,28 +300,28 @@ validate_existing_node
    && $port == "$checked_port" \
    && $username == "$checked_username" \
    && $password == "$checked_password" ]] \
-  || die "确认期间节点状态已经变化；没有执行升级，请重新运行只读检查"
+  || die "检查期间节点状态已经变化；没有执行版本切换，请重新运行命令"
 validate_target
 
-tmp_dir=$(mktemp -d)
-cleanup() { rm -rf -- "$tmp_dir"; }
-trap cleanup EXIT
-printf '正在下载稳定版 %s...\n' "$target_tag"
-if ! GIT_TERMINAL_PROMPT=0 "$TIMEOUT_BIN" --signal=TERM "$CLONE_TIMEOUT_SECONDS" \
-  git clone --quiet --branch "$target_tag" --depth 1 "$REPOSITORY_URL" "$tmp_dir/package"; then
-  die "下载稳定版超时或失败；没有开始安装，请检查网络后重试"
+if [[ $switch_direction == downgrade ]]; then
+  find_compatible_snapshot
+  printf '正在恢复已验证的 %s（v%s）...\n' "$snapshot_name" "$target_version"
+  "$SAFETY_BIN" restore "$snapshot_path" >/dev/null \
+    || die "旧版快照恢复失败；安全模块已保留恢复前状态，请运行 socksctl report"
+  validate_existing_node
+  [[ $current_version == "$target_version" \
+     && $node_name == "$checked_node_name" \
+     && $public_ip == "$checked_public_ip" \
+     && $port == "$checked_port" \
+     && $username == "$checked_username" \
+     && $password == "$checked_password" ]] \
+    || die "恢复后版本或节点信息验收失败，请立即运行 socksctl report"
+  printf '安全版本切换完成：v%s → %s（使用本机健康快照，无需下载）\n' \
+    "$checked_current_version" "$target_tag"
+  exit 0
 fi
-downloaded_commit=$(git -C "$tmp_dir/package" rev-parse HEAD 2>/dev/null || true)
-[[ $downloaded_commit == "$remote_commit" ]] \
-  || die "下载的标签指向发生变化；没有执行升级，请人工检查远端标签"
-package_version=$(tr -d '[:space:]' <"$tmp_dir/package/VERSION" 2>/dev/null || true)
-installer_version=$(bash "$tmp_dir/package/install.sh" --version 2>/dev/null || true)
-[[ $package_version == "$target_version" && $installer_version == "$target_version" ]] \
-  || die "下载包版本不一致；没有执行升级"
-[[ -f $tmp_dir/package/scripts/socks-upgrade ]] \
-  || die "目标版本缺少安全升级模块；没有执行升级"
 
-printf '开始事务升级；将保留节点IP记录、端口、用户名和密码。\n'
+printf '开始事务切换；将保留节点IP记录、端口、用户名和密码。\n'
 SOCKS_LOCK_HELD=1 bash "$tmp_dir/package/install.sh" --port "$port" --preserve-node
 installed_version=$(read_env_value TOOL_VERSION)
 installed_node_name=$(read_env_value NODE_NAME)
@@ -205,6 +335,6 @@ installed_password=$(read_env_value SOCKS_PASSWORD)
    && $installed_port == "$checked_port" \
    && $installed_username == "$checked_username" \
    && $installed_password == "$checked_password" ]] \
-  || die "升级后版本或节点信息验收失败，请立即运行 socksctl report"
+  || die "切换后版本或节点信息验收失败，请立即运行 socksctl report"
 display_current=${checked_current_version/#legacy/早期版本}
-printf '安全升级完成：%s → %s\n' "$display_current" "$target_tag"
+printf '安全版本切换完成：%s → %s\n' "$display_current" "$target_tag"

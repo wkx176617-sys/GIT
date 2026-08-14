@@ -13,7 +13,7 @@ GOST（唯一常驻业务进程）
 ├── socksctl：统一命令入口和中文菜单
 ├── socks-doctor：只读或留档诊断
 ├── socks-safety：事件、快照、校验和恢复
-├── socks-upgrade：已有本项目节点的指定版本升级
+├── socks-upgrade：已有本项目节点的稳定版本切换与健康快照降版
 └── uninstall：确认后卸载
 
 独立扩展层
