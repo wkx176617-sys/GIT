@@ -16,11 +16,11 @@ readonly TIMEOUT_BIN="${SOCKS_TIMEOUT_BIN:-timeout}"
 usage() {
   cat <<'EOF'
 推荐用法：
-  sudo socks-upgrade v1.9.3
+  sudo socks-upgrade v1.9.4
 
 其他用法：
   sudo socks-upgrade --current
-  sudo socks-upgrade --check v1.9.3
+  sudo socks-upgrade --check v1.9.4
 
 只升级已经由本项目管理的 GOST SOCKS5 节点。不会用于首次安装、降级或迁移其他代理。
 正式升级会先执行与 --check 相同的只读检查，通过后才请求人工确认。
@@ -72,7 +72,7 @@ validate_existing_node() {
 
 validate_target() {
   [[ $target_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-    || die "目标必须是完整稳定标签，例如 v1.9.3；不接受 main、latest 或省略版本号"
+    || die "目标必须是完整稳定标签，例如 v1.9.4；不接受 main、latest 或省略版本号"
   target_version=${target_tag#v}
   if [[ $current_version == "$target_version" ]]; then
     die "当前已经是 ${target_tag}，无需重复升级"
@@ -105,7 +105,7 @@ case "${1:-}" in
     action=current
     ;;
   --check)
-    [[ $# -eq 2 ]] || die "用法：socks-upgrade --check v1.9.3"
+    [[ $# -eq 2 ]] || die "用法：socks-upgrade --check v1.9.4"
     target_tag=$2
     action=check
     check_only=true
@@ -117,7 +117,7 @@ case "${1:-}" in
     check_only=false
     ;;
   "") usage; exit 1 ;;
-  *) die "无法识别参数。目标必须像 v1.9.3" ;;
+  *) die "无法识别参数。目标必须像 v1.9.4" ;;
 esac
 
 [[ $TAG_CHECK_TIMEOUT_SECONDS =~ ^[0-9]+$ && $TAG_CHECK_TIMEOUT_SECONDS -ge 1 \

@@ -48,6 +48,9 @@ if grep -Fq 'scripts/socks-upgrade --check' docs/upgrade.md; then
 fi
 grep -Fq 'socksctl export' docs/clients.md && grep -Fq 'socksctl qr shadowrocket' docs/clients.md \
   || { printf '客户端教程缺少链接或二维码说明\n' >&2; exit 1; }
+grep -Fq 'v1.9.4 及以后会在安装或升级时自动' docs/clients.md \
+  && grep -Fq 'apt-get install -y qrencode' docs/clients.md \
+  || { printf '客户端教程缺少二维码依赖闭环或人工删除后的恢复说明\n' >&2; exit 1; }
 grep -Fq 'socksctl refresh-ip --check' docs/change-public-ip.md \
   && grep -Fq 'socksctl refresh-ip' docs/change-public-ip.md \
   || { printf '换IP教程缺少只读检查或更新命令\n' >&2; exit 1; }

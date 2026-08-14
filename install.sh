@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly GOST_VERSION="3.2.6"
-readonly TOOL_VERSION_CURRENT="1.9.3"
+readonly TOOL_VERSION_CURRENT="1.9.4"
 readonly CONFIG_DIR="/etc/gost-socks"
 readonly CONFIG_FILE="$CONFIG_DIR/gost.yaml"
 readonly ENV_FILE="$CONFIG_DIR/node.env"
@@ -73,22 +73,22 @@ done
 [[ -r /etc/os-release ]] || die "无法读取 /etc/os-release"
 # shellcheck disable=SC1091
 source /etc/os-release
-[[ ${ID:-} == ubuntu ]] || die "v1.9.3 当前只支持 Ubuntu 镜像"
+[[ ${ID:-} == ubuntu ]] || die "v1.9.4 当前只支持 Ubuntu 镜像"
 case "${VERSION_ID:-}" in
   20.04|22.04|24.04) ;;
   *) die "当前只支持 Ubuntu 20.04、22.04、24.04" ;;
 esac
 
-missing_base=false
-for base_command in curl find sha256sum ss tar useradd; do
-  command -v "$base_command" >/dev/null 2>&1 || missing_base=true
+missing_dependency=false
+for dependency_command in curl find qrencode sha256sum ss tar useradd; do
+  command -v "$dependency_command" >/dev/null 2>&1 || missing_dependency=true
 done
-if [[ $missing_base == true ]]; then
-  command -v apt-get >/dev/null 2>&1 || die "精简镜像缺少基础命令，且无法使用 apt-get 补齐"
+if [[ $missing_dependency == true ]]; then
+  command -v apt-get >/dev/null 2>&1 || die "系统缺少运行依赖，且无法使用 apt-get 补齐"
   export DEBIAN_FRONTEND=noninteractive
-  printf '正在为 Ubuntu 精简镜像补齐基础依赖...\n'
+  printf '正在补齐 Ubuntu 运行依赖（包含本地二维码组件）...\n'
   apt-get update
-  apt-get install -y ca-certificates coreutils curl findutils iproute2 passwd tar
+  apt-get install -y ca-certificates coreutils curl findutils iproute2 passwd qrencode tar
 fi
 
 read_env_value() {
@@ -185,7 +185,7 @@ case "$(uname -m)" in
   *) die "不支持的 CPU 架构：$(uname -m)" ;;
 esac
 
-for required_command in curl find install sha256sum ss systemctl tar useradd; do
+for required_command in curl find install qrencode sha256sum ss systemctl tar useradd; do
   command -v "$required_command" >/dev/null 2>&1 || die "缺少系统命令：$required_command"
 done
 

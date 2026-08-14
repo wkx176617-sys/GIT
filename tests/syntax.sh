@@ -51,7 +51,10 @@ grep -q "remote_dir/scripts" "$project_dir/deploy.sh"
 grep -q 'readonly GOST_VERSION="3.2.6"' "$project_dir/install.sh"
 grep -q 'node_name=$public_ip' "$project_dir/install.sh"
 grep -q 'PUBLIC_IP=$public_ip' "$project_dir/install.sh"
-grep -q 'readonly TOOL_VERSION_CURRENT="1.9.3"' "$project_dir/install.sh"
+grep -q 'readonly TOOL_VERSION_CURRENT="1.9.4"' "$project_dir/install.sh"
+grep -q 'for dependency_command in .*qrencode' "$project_dir/install.sh"
+grep -q 'apt-get install -y .*qrencode' "$project_dir/install.sh"
+grep -q 'for required_command in .*qrencode' "$project_dir/install.sh"
 grep -q 'control_source="$script_dir/scripts/socksctl"' "$project_dir/install.sh"
 if grep -q 'control_source="$script_dir/socksctl"' "$project_dir/install.sh"; then
   printf '安装器仍可能优先使用根目录遗留的旧 socksctl。\n' >&2
@@ -411,6 +414,17 @@ export_output=$(SOCKSCTL_CONFIG_DIR="$test_config_dir" "$project_dir/scripts/soc
 grep -Fq 'socks://bm9kZV9leGFtcGxlOjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm@203.0.113.10:31080#203.0.113.10' <<<"$export_output"
 grep -Fq 'socks5://node_example:0123456789abcdef0123456789abcdef@203.0.113.10:31080#203.0.113.10' <<<"$export_output"
 grep -Fq '203.0.113.10=socks5,203.0.113.10,31080,node_example,0123456789abcdef0123456789abcdef' <<<"$export_output"
+mkdir -p "$test_config_dir/fakebin"
+cat >"$test_config_dir/fakebin/qrencode" <<'EOF'
+#!/usr/bin/env bash
+printf 'QR参数：%s\n' "$*"
+EOF
+chmod +x "$test_config_dir/fakebin/qrencode"
+qr_output=$(PATH="$test_config_dir/fakebin:$PATH" SOCKSCTL_CONFIG_DIR="$test_config_dir" \
+  "$project_dir/scripts/socksctl" qr shadowrocket)
+grep -Fq '请使用自己的设备扫描' <<<"$qr_output"
+grep -Fq 'QR参数：-t ANSIUTF8 socks5://node_example:0123456789abcdef0123456789abcdef@203.0.113.10:31080#203.0.113.10' \
+  <<<"$qr_output"
 unexpected_ips=$(rg -o --no-filename '([0-9]{1,3}\.){3}[0-9]{1,3}' "$project_dir" \
   -g '!.git/**' | sort -u \
   | grep -Ev '^(0\.0\.0\.0|127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|192\.0\.2\.[0-9]{1,3}|198\.51\.100\.[0-9]{1,3}|203\.0\.113\.[0-9]{1,3})$' \

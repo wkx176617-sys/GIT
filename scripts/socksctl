@@ -205,7 +205,7 @@ case "$command_name" in
     qr_type=${1:-shadowrocket}
     make_share_links
     command -v qrencode >/dev/null 2>&1 \
-      || die "服务器未安装 qrencode；请执行 apt-get update && apt-get install -y qrencode"
+      || die "二维码组件 qrencode 已被删除；请执行 apt-get update && apt-get install -y qrencode"
     case "$qr_type" in
       v2rayn) qr_link=$V2RAYN_LINK ;;
       shadowrocket) qr_link=$SHADOWROCKET_LINK ;;
